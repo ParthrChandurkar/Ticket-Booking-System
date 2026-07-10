@@ -129,6 +129,9 @@ export const releaseSeatHold = async (req: Request, res: Response) => {
   const showId = getRouteParam(req, "showId");
   const seatId = getRouteParam(req, "seatId");
 
+  // TODO before final submission: release and expiry are independent writers on ShowSeat.
+  // Re-check this once waitlist reassignment exists so both paths remain idempotent
+  // and conditional enough to avoid clobbering a newly reassigned hold.
   const updatedRows = await prisma.$queryRaw<{ id: string }[]>(Prisma.sql`
     UPDATE "ShowSeat"
     SET status = 'AVAILABLE'::"SeatStatus",

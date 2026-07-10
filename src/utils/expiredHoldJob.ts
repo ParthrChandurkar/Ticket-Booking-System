@@ -2,6 +2,9 @@ import cron from "node-cron";
 import { prisma } from "../config/prisma";
 
 export const releaseExpiredHolds = async () => {
+  // TODO before final submission: this cron and the manual release handler both write ShowSeat.
+  // Re-check once waitlist reassignment exists; the blind expiry update must not clobber
+  // a newly reassigned hold in the same window.
   const updatedCount = await prisma.$executeRaw`
     UPDATE "ShowSeat"
     SET status = 'AVAILABLE'::"SeatStatus",
