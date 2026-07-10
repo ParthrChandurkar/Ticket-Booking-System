@@ -80,3 +80,26 @@ enum SeatStatus {
   HELD
   BOOKED
 }
+
+model Booking {
+  id               String        @id @default(uuid())
+  customerId       String
+  showId           String
+  bookingReference String        @unique
+  status           BookingStatus @default(CONFIRMED)
+  totalPrice       Float
+  createdAt        DateTime      @default(now())
+  seats            BookingSeat[]
+}
+
+enum BookingStatus {
+  CONFIRMED
+  CANCELLED
+}
+
+model BookingSeat {
+  id         String  @id @default(uuid())
+  bookingId  String
+  booking    Booking @relation(fields: [bookingId], references: [id])
+  showSeatId String
+}
