@@ -60,6 +60,16 @@ export const createShow = async (req: Request, res: Response) => {
       });
     }
 
+    if (req.body.categoryPrices?.length) {
+      await tx.showSeatPricing.createMany({
+        data: req.body.categoryPrices.map((price: { category: string; price: number }) => ({
+          showId: createdShow.id,
+          category: price.category,
+          price: price.price
+        }))
+      });
+    }
+
     return createdShow;
   });
 

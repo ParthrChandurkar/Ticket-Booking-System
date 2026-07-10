@@ -69,6 +69,30 @@ export const createBooking = async (req: Request, res: Response) => {
       throw new HttpError(409, "One or more seats are not held by this user");
     }
 
+    const categories = uniqueValues(seats.map((seat) => seat.seatLayout.category));
+    const pricing = await tx.showSeatPricing.findMany({
+      where: {
+        showId: showIds[0],
+        category: { in: categories }
+      }
+    });
+
+    if (pricing.length !== categories.length) {
+      throw new HttpError(409, "One or more seats are missing category pricing");
+    }
+
+    const priceByCategory = new Map(
+      pricing.map((price) => [price.category, price.price] as const)
+    );
+    const totalPrice = seats.reduce((sum, seat) => {
+      const price = priceByCategory.get(seat.seatLayout.category);
+      if (price === undefined) {
+        throw new HttpError(409, "One or more seats are missing category pricing");
+      }
+
+      return sum + price;
+    }, 0);
+
     const updatedSeats = await tx.showSeat.updateMany({
       where: {
         id: { in: showSeatIds },
@@ -92,7 +116,7 @@ export const createBooking = async (req: Request, res: Response) => {
         customerId: user.id,
         showId: showIds[0],
         bookingReference: randomUUID(),
-        totalPrice: 0,
+        totalPrice,
         seats: {
           create: showSeatIds.map((showSeatId) => ({
             showSeatId

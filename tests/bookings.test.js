@@ -14,6 +14,10 @@ jest.mock("resend", () => ({
   }))
 }));
 
+jest.mock("../dist/src/utils/sleep", () => ({
+  sleep: jest.fn(async () => undefined)
+}));
+
 const { app } = require("../dist/src/app");
 
 const prisma = new PrismaClient();
@@ -22,7 +26,7 @@ jest.setTimeout(30000);
 
 const cleanDatabase = async () => {
   await prisma.$executeRawUnsafe(
-    'TRUNCATE TABLE "BookingSeat", "Booking", "ShowSeat", "Show", "Event", "SeatLayout", "Venue", "User" RESTART IDENTITY CASCADE'
+    'TRUNCATE TABLE "BookingSeat", "Booking", "ShowSeatPricing", "ShowSeat", "Show", "Event", "SeatLayout", "Venue", "User" RESTART IDENTITY CASCADE'
   );
 };
 
@@ -47,7 +51,11 @@ const registerAndLogin = async (role, prefix) => {
   };
 };
 
-const createShowWithHeldSeat = async ({ expired = false } = {}) => {
+const createShowWithHeldSeats = async ({
+  expired = false,
+  seats = [{ rowLabel: "A", seatNumber: 1, category: "STANDARD" }],
+  categoryPrices = [{ category: "STANDARD", price: 25 }]
+} = {}) => {
   const admin = await registerAndLogin("ADMIN", "booking-admin");
   const organiser = await registerAndLogin("ORGANISER", "booking-organiser");
   const customer = await registerAndLogin("CUSTOMER", "booking-customer");
@@ -61,14 +69,18 @@ const createShowWithHeldSeat = async ({ expired = false } = {}) => {
     });
   expect(venueResponse.status).toBe(201);
 
-  const seatLayout = await prisma.seatLayout.create({
-    data: {
-      venueId: venueResponse.body.venue.id,
-      rowLabel: "A",
-      seatNumber: 1,
-      category: "STANDARD"
-    }
-  });
+  const seatLayouts = await Promise.all(
+    seats.map((seat) =>
+      prisma.seatLayout.create({
+        data: {
+          venueId: venueResponse.body.venue.id,
+          rowLabel: seat.rowLabel,
+          seatNumber: seat.seatNumber,
+          category: seat.category
+        }
+      })
+    )
+  );
 
   const eventResponse = await request(app)
     .post("/events")
@@ -85,31 +97,41 @@ const createShowWithHeldSeat = async ({ expired = false } = {}) => {
     .set("Authorization", `Bearer ${organiser.token}`)
     .send({
       date: "2026-09-01T00:00:00.000Z",
-      time: "20:00"
+      time: "20:00",
+      categoryPrices
     });
   expect(showResponse.status).toBe(201);
 
-  const showSeat = await prisma.showSeat.findFirstOrThrow({
-    where: {
-      showId: showResponse.body.show.id,
-      seatLayoutId: seatLayout.id
-    }
-  });
+  const showSeats = await Promise.all(
+    seatLayouts.map((seatLayout) =>
+      prisma.showSeat.findFirstOrThrow({
+        where: {
+          showId: showResponse.body.show.id,
+          seatLayoutId: seatLayout.id
+        }
+      })
+    )
+  );
 
   const holdUntil = new Date(Date.now() + (expired ? -60_000 : 600_000));
-  await prisma.showSeat.update({
-    where: { id: showSeat.id },
-    data: {
-      status: "HELD",
-      heldBy: customer.user.id,
-      heldUntil: holdUntil
-    }
-  });
+  await Promise.all(
+    showSeats.map((showSeat) =>
+      prisma.showSeat.update({
+        where: { id: showSeat.id },
+        data: {
+          status: "HELD",
+          heldBy: customer.user.id,
+          heldUntil: holdUntil
+        }
+      })
+    )
+  );
 
   return {
     customer,
     showId: showResponse.body.show.id,
-    showSeatId: showSeat.id
+    showSeatId: showSeats[0].id,
+    showSeatIds: showSeats.map((showSeat) => showSeat.id)
   };
 };
 
@@ -121,6 +143,10 @@ beforeAll(() => {
 
 beforeEach(async () => {
   mockSend.mockClear();
+  mockSend.mockResolvedValue({
+    data: { id: "email-id" },
+    error: null
+  });
   await cleanDatabase();
 });
 
@@ -131,27 +157,40 @@ afterAll(async () => {
 
 describe("bookings", () => {
   test("creates a booking from a valid hold, books the seat, and sends confirmation email", async () => {
-    const { customer, showSeatId } = await createShowWithHeldSeat();
+    const { customer, showSeatIds } = await createShowWithHeldSeats({
+      seats: [
+        { rowLabel: "A", seatNumber: 1, category: "STANDARD" },
+        { rowLabel: "A", seatNumber: 2, category: "PREMIUM" }
+      ],
+      categoryPrices: [
+        { category: "STANDARD", price: 20 },
+        { category: "PREMIUM", price: 55.5 }
+      ]
+    });
 
     const response = await request(app)
       .post("/bookings")
       .set("Authorization", `Bearer ${customer.token}`)
       .send({
-        showSeatIds: [showSeatId]
+        showSeatIds
       });
 
     expect(response.status).toBe(201);
     expect(response.body.booking.status).toBe("CONFIRMED");
+    expect(response.body.booking.totalPrice).toBe(75.5);
     expect(response.body.booking.bookingReference).toEqual(expect.any(String));
-    expect(response.body.booking.seats).toHaveLength(1);
+    expect(response.body.booking.seats).toHaveLength(2);
     expect(response.body.emailFailed).toBe(false);
 
-    const seat = await prisma.showSeat.findUniqueOrThrow({
-      where: { id: showSeatId }
+    const bookedSeats = await prisma.showSeat.findMany({
+      where: { id: { in: showSeatIds } }
     });
-    expect(seat.status).toBe("BOOKED");
-    expect(seat.heldBy).toBeNull();
-    expect(seat.heldUntil).toBeNull();
+    expect(bookedSeats).toHaveLength(2);
+    bookedSeats.forEach((seat) => {
+      expect(seat.status).toBe("BOOKED");
+      expect(seat.heldBy).toBeNull();
+      expect(seat.heldUntil).toBeNull();
+    });
 
     expect(mockSend).toHaveBeenCalledTimes(1);
     const emailPayload = mockSend.mock.calls[0][0];
@@ -160,7 +199,7 @@ describe("bookings", () => {
   });
 
   test("returns 410 when a held seat has expired and does not create a booking", async () => {
-    const { customer, showSeatId } = await createShowWithHeldSeat({ expired: true });
+    const { customer, showSeatId } = await createShowWithHeldSeats({ expired: true });
 
     const response = await request(app)
       .post("/bookings")
@@ -182,7 +221,7 @@ describe("bookings", () => {
   });
 
   test("cancels a booking and flips booked seats back to available", async () => {
-    const { customer, showSeatId } = await createShowWithHeldSeat();
+    const { customer, showSeatId } = await createShowWithHeldSeats();
 
     const bookingResponse = await request(app)
       .post("/bookings")
@@ -206,5 +245,28 @@ describe("bookings", () => {
     expect(seat.status).toBe("AVAILABLE");
     expect(seat.heldBy).toBeNull();
     expect(seat.heldUntil).toBeNull();
+  });
+
+  test("keeps booking confirmed when confirmation email fails after 3 retry attempts", async () => {
+    mockSend.mockRejectedValue(new Error("Resend unavailable"));
+    const { customer, showSeatId } = await createShowWithHeldSeats();
+
+    const response = await request(app)
+      .post("/bookings")
+      .set("Authorization", `Bearer ${customer.token}`)
+      .send({
+        showSeatIds: [showSeatId]
+      });
+
+    expect(response.status).toBe(201);
+    expect(response.body.booking.status).toBe("CONFIRMED");
+    expect(response.body.emailFailed).toBe(true);
+    expect(mockSend).toHaveBeenCalledTimes(3);
+
+    const booking = await prisma.booking.findUniqueOrThrow({
+      where: { id: response.body.booking.id }
+    });
+
+    expect(booking.status).toBe("CONFIRMED");
   });
 });

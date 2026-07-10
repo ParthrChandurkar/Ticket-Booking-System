@@ -54,12 +54,13 @@ model Event {
 }
 
 model Show {
-  id        String     @id @default(uuid())
+  id        String            @id @default(uuid())
   eventId   String
-  event     Event      @relation(fields: [eventId], references: [id])
+  event     Event             @relation(fields: [eventId], references: [id])
   date      DateTime
   time      String
   showSeats ShowSeat[]
+  pricing   ShowSeatPricing[]
 }
 
 model ShowSeat {
@@ -79,6 +80,16 @@ enum SeatStatus {
   AVAILABLE
   HELD
   BOOKED
+}
+
+model ShowSeatPricing {
+  id       String @id @default(uuid())
+  showId   String
+  show     Show   @relation(fields: [showId], references: [id])
+  category String
+  price    Float
+
+  @@unique([showId, category])
 }
 
 model Booking {
