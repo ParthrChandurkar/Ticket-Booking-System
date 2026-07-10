@@ -32,12 +32,13 @@ model Venue {
 }
 
 model SeatLayout {
-  id         String @id @default(uuid())
-  venueId    String
-  venue      Venue  @relation(fields: [venueId], references: [id])
-  rowLabel   String
-  seatNumber Int
-  category   String
+  id          String     @id @default(uuid())
+  venueId     String
+  venue       Venue      @relation(fields: [venueId], references: [id])
+  rowLabel    String
+  seatNumber  Int
+  category    String
+  showSeats   ShowSeat[]
 
   @@unique([venueId, rowLabel, seatNumber])
 }
@@ -53,9 +54,29 @@ model Event {
 }
 
 model Show {
-  id      String   @id @default(uuid())
-  eventId String
-  event   Event    @relation(fields: [eventId], references: [id])
-  date    DateTime
-  time    String
+  id        String     @id @default(uuid())
+  eventId   String
+  event     Event      @relation(fields: [eventId], references: [id])
+  date      DateTime
+  time      String
+  showSeats ShowSeat[]
+}
+
+model ShowSeat {
+  id           String     @id @default(uuid())
+  showId       String
+  show         Show       @relation(fields: [showId], references: [id])
+  seatLayoutId String
+  seatLayout   SeatLayout @relation(fields: [seatLayoutId], references: [id])
+  status       SeatStatus @default(AVAILABLE)
+  heldBy       String?
+  heldUntil    DateTime?
+
+  @@unique([showId, seatLayoutId])
+}
+
+enum SeatStatus {
+  AVAILABLE
+  HELD
+  BOOKED
 }

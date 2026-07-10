@@ -10,7 +10,7 @@ const uniqueEmail = (prefix) => `${prefix}.${Date.now()}.${Math.random()}@exampl
 
 const cleanDatabase = async () => {
   await prisma.$executeRawUnsafe(
-    'TRUNCATE TABLE "Show", "Event", "SeatLayout", "Venue", "User" RESTART IDENTITY CASCADE'
+    'TRUNCATE TABLE "ShowSeat", "Show", "Event", "SeatLayout", "Venue", "User" RESTART IDENTITY CASCADE'
   );
 };
 
