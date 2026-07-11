@@ -157,6 +157,35 @@ afterAll(async () => {
 
 describe("bookings", () => {
   test("creates a booking from a valid hold, books the seat, and sends confirmation email", async () => {
+    const { customer, showSeatId } = await createShowWithHeldSeats();
+
+    const response = await request(app)
+      .post("/bookings")
+      .set("Authorization", `Bearer ${customer.token}`)
+      .send({
+        showSeatIds: [showSeatId]
+      });
+
+    expect(response.status).toBe(201);
+    expect(response.body.booking.status).toBe("CONFIRMED");
+    expect(response.body.booking.bookingReference).toEqual(expect.any(String));
+    expect(response.body.booking.seats).toHaveLength(1);
+    expect(response.body.emailFailed).toBe(false);
+
+    const seat = await prisma.showSeat.findUniqueOrThrow({
+      where: { id: showSeatId }
+    });
+    expect(seat.status).toBe("BOOKED");
+    expect(seat.heldBy).toBeNull();
+    expect(seat.heldUntil).toBeNull();
+
+    expect(mockSend).toHaveBeenCalledTimes(1);
+    const emailPayload = mockSend.mock.calls[0][0];
+    expect(emailPayload.html).toContain(response.body.booking.bookingReference);
+    expect(emailPayload.html).toContain("data:image/png;base64,");
+  });
+
+  test("calculates totalPrice from per-category show pricing", async () => {
     const { customer, showSeatIds } = await createShowWithHeldSeats({
       seats: [
         { rowLabel: "A", seatNumber: 1, category: "STANDARD" },
@@ -178,9 +207,7 @@ describe("bookings", () => {
     expect(response.status).toBe(201);
     expect(response.body.booking.status).toBe("CONFIRMED");
     expect(response.body.booking.totalPrice).toBe(75.5);
-    expect(response.body.booking.bookingReference).toEqual(expect.any(String));
     expect(response.body.booking.seats).toHaveLength(2);
-    expect(response.body.emailFailed).toBe(false);
 
     const bookedSeats = await prisma.showSeat.findMany({
       where: { id: { in: showSeatIds } }
@@ -191,11 +218,6 @@ describe("bookings", () => {
       expect(seat.heldBy).toBeNull();
       expect(seat.heldUntil).toBeNull();
     });
-
-    expect(mockSend).toHaveBeenCalledTimes(1);
-    const emailPayload = mockSend.mock.calls[0][0];
-    expect(emailPayload.html).toContain(response.body.booking.bookingReference);
-    expect(emailPayload.html).toContain("data:image/png;base64,");
   });
 
   test("returns 410 when a held seat has expired and does not create a booking", async () => {
