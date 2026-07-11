@@ -141,9 +141,29 @@ const Field = ({
 
 const loginSchema = z.object({ email: z.string().email(), password: z.string().min(1) });
 const registerSchema = loginSchema.extend({
-  name: z.string().min(2),
-  role: z.enum(["CUSTOMER", "ORGANISER", "ADMIN"])
+  name: z.string().min(2)
 });
+
+const LogoMark = ({ compact = false }: { compact?: boolean }) => (
+  <div className={compact ? "logo-lockup compact" : "logo-lockup"}>
+    <svg className="seatflow-mark" viewBox="0 0 48 48" aria-hidden="true">
+      <path d="M13 11h22a5 5 0 0 1 5 5v6H8v-6a5 5 0 0 1 5-5Z" />
+      <path d="M8 25h32v7a5 5 0 0 1-5 5H13a5 5 0 0 1-5-5v-7Z" opacity=".82" />
+      <path d="M15 37v4M33 37v4M16 19h16" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+    </svg>
+    {!compact && <span>SeatFlow</span>}
+  </div>
+);
+
+const passwordStrength = (password: string) => {
+  let score = 0;
+  if (password.length >= 8) score += 1;
+  if (/[A-Z]/.test(password) && /[a-z]/.test(password)) score += 1;
+  if (/\d/.test(password) || /[^A-Za-z0-9]/.test(password)) score += 1;
+  if (score <= 1) return "weak";
+  if (score === 2) return "medium";
+  return "strong";
+};
 
 function AuthPage() {
   const [mode, setMode] = React.useState<"login" | "register">("login");
@@ -152,8 +172,7 @@ function AuthPage() {
   const [form, setForm] = React.useState({
     name: "",
     email: "",
-    password: "",
-    role: "CUSTOMER" as Role
+    password: ""
   });
   const setSession = useAuth((state) => state.setSession);
 
@@ -167,7 +186,10 @@ function AuthPage() {
     }
     try {
       if (mode === "register") {
-        await api("/auth/register", { method: "POST", body: JSON.stringify(form) });
+        await api("/auth/register", {
+          method: "POST",
+          body: JSON.stringify({ name: form.name, email: form.email, password: form.password })
+        });
       }
       const session = await api<{ user: User; accessToken: string; refreshToken: string }>(
         "/auth/login",
@@ -183,7 +205,7 @@ function AuthPage() {
   return (
     <main className="auth-shell">
       <section className="brand-panel">
-        <div className="brand-mark">SF</div>
+        <LogoMark />
         <h1>SeatFlow</h1>
         <p>Reserved seats, real-time holds, and confident checkout for every show.</p>
         <div className="brand-stats">
@@ -194,7 +216,7 @@ function AuthPage() {
       </section>
       <section className="auth-card">
         <div>
-          <p className="eyebrow">{mode === "login" ? "Welcome back" : "Create workspace access"}</p>
+          <p className="eyebrow">{mode === "login" ? "Welcome back" : "Join SeatFlow"}</p>
           <h2>{mode === "login" ? "Sign in to continue" : "Create your account"}</h2>
         </div>
         <form onSubmit={submit} noValidate>
@@ -217,16 +239,13 @@ function AuthPage() {
                 {showPassword ? "Hide" : "Show"}
               </button>
             </div>
+            {mode === "register" && (
+              <div className={`strength ${passwordStrength(form.password)}`}>
+                <span />
+                <strong>{passwordStrength(form.password)}</strong>
+              </div>
+            )}
           </Field>
-          {mode === "register" && (
-            <Field label="Role" error={errors.role}>
-              <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as Role })}>
-                <option value="CUSTOMER">Customer</option>
-                <option value="ORGANISER">Organiser</option>
-                <option value="ADMIN">Admin</option>
-              </select>
-            </Field>
-          )}
           {errors.root && <p className="form-error">{errors.root}</p>}
           <button className="primary-button" type="submit">
             {mode === "login" ? "Sign in" : "Create account"}
@@ -246,7 +265,7 @@ function Shell({ children }: { children: React.ReactNode }) {
   return (
     <div className="app-shell">
       <aside className="sidebar">
-        <div className="logo">SeatFlow</div>
+        <div className="logo"><LogoMark /></div>
         <nav>
           <button onClick={() => go("/events")}>Events</button>
           <button onClick={() => go("/bookings")}>Bookings</button>

@@ -1,4 +1,5 @@
 const request = require("supertest");
+const jwt = require("jsonwebtoken");
 
 const mockSend = jest.fn(async () => ({
   data: { id: "email-id" },
@@ -24,11 +25,35 @@ jest.setTimeout(90000);
 
 const registerAndLogin = async (role, prefix) => {
   const email = `${prefix}.${Date.now()}.${Math.random()}@example.com`;
+  if (role !== "CUSTOMER") {
+    const user = await prisma.user.create({
+      data: {
+        name: `${role} User`,
+        email,
+        passwordHash: "test-hash",
+        role
+      }
+    });
+
+    return {
+      token: jwt.sign(
+        {
+          sub: user.id,
+          email: user.email,
+          role: user.role,
+          type: "access"
+        },
+        process.env.JWT_SECRET,
+        { expiresIn: "15m" }
+      ),
+      user
+    };
+  }
+
   await request(app).post("/auth/register").send({
     name: `${role} User`,
     email,
-    password: "password123",
-    role
+    password: "password123"
   });
 
   const loginResponse = await request(app).post("/auth/login").send({

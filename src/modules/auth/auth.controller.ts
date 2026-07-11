@@ -1,6 +1,8 @@
 import bcrypt from "bcrypt";
+import { Role } from "@prisma/client";
 import { Request, Response } from "express";
 import { prisma } from "../../config/prisma";
+import { getEnv } from "../../config/env";
 import { HttpError } from "../../utils/httpError";
 import { createAccessToken, createRefreshToken, verifyToken } from "../../utils/tokens";
 
@@ -37,7 +39,34 @@ export const register = async (req: Request, res: Response) => {
       name: req.body.name,
       email: req.body.email,
       passwordHash,
-      role: req.body.role
+      role: Role.CUSTOMER
+    }
+  });
+
+  res.status(201).json({
+    user: publicUser(user)
+  });
+};
+
+export const registerOrganiser = async (req: Request, res: Response) => {
+  if (req.body.organiserSignupCode !== getEnv("ORGANISER_SIGNUP_CODE")) {
+    throw new HttpError(403, "Invalid organiser signup code");
+  }
+
+  const existing = await prisma.user.findUnique({
+    where: { email: req.body.email }
+  });
+  if (existing) {
+    throw new HttpError(409, "Email is already registered");
+  }
+
+  const passwordHash = await bcrypt.hash(req.body.password, 12);
+  const user = await prisma.user.create({
+    data: {
+      name: req.body.name,
+      email: req.body.email,
+      passwordHash,
+      role: Role.ORGANISER
     }
   });
 

@@ -9,6 +9,7 @@
     "dev": "tsc --watch",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
+    "prisma:seed": "node prisma/seed.js",
     "test": "node scripts/run-tests.js"
   },
   "dependencies": {

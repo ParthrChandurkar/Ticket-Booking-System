@@ -28,12 +28,12 @@ describe("auth", () => {
     const response = await request(app).post("/auth/register").send({
       name: "Test Customer",
       email,
-      password: "password123",
-      role: "CUSTOMER"
+      password: "password123"
     });
 
     expect(response.status).toBe(201);
     expect(response.body.user.email).toBe(email);
+    expect(response.body.user.role).toBe("CUSTOMER");
     expect(response.body.user.passwordHash).toBeUndefined();
 
     const user = await prisma.user.findUnique({ where: { email } });
@@ -42,14 +42,52 @@ describe("auth", () => {
     expect(user.passwordHash.startsWith("$2")).toBe(true);
   });
 
+  test("public register ignores submitted role and always creates a customer", async () => {
+    const email = uniqueEmail("role-ignore");
+
+    const response = await request(app).post("/auth/register").send({
+      name: "Role Escalation Attempt",
+      email,
+      password: "password123",
+      role: "ADMIN"
+    });
+
+    expect(response.status).toBe(201);
+    expect(response.body.user.role).toBe("CUSTOMER");
+
+    const user = await prisma.user.findUnique({ where: { email } });
+    expect(user.role).toBe("CUSTOMER");
+  });
+
+  test("organiser registration requires the shared signup code", async () => {
+    const email = uniqueEmail("organiser");
+
+    const forbidden = await request(app).post("/auth/register-organiser").send({
+      name: "No Code Organiser",
+      email,
+      password: "password123",
+      organiserSignupCode: "wrong-code"
+    });
+    expect(forbidden.status).toBe(403);
+
+    const response = await request(app).post("/auth/register-organiser").send({
+      name: "Invited Organiser",
+      email,
+      password: "password123",
+      organiserSignupCode: process.env.ORGANISER_SIGNUP_CODE
+    });
+
+    expect(response.status).toBe(201);
+    expect(response.body.user.role).toBe("ORGANISER");
+  });
+
   test("login returns access and refresh tokens", async () => {
     const email = uniqueEmail("login");
 
     await request(app).post("/auth/register").send({
       name: "Login Customer",
       email,
-      password: "password123",
-      role: "CUSTOMER"
+      password: "password123"
     });
 
     const response = await request(app).post("/auth/login").send({
@@ -69,8 +107,7 @@ describe("auth", () => {
     await request(app).post("/auth/register").send({
       name: "Wrong Role",
       email,
-      password: "password123",
-      role: "CUSTOMER"
+      password: "password123"
     });
 
     const loginResponse = await request(app).post("/auth/login").send({
