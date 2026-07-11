@@ -37,41 +37,47 @@ export const createShow = async (req: Request, res: Response) => {
     throw new HttpError(404, "Event not found");
   }
 
-  const show = await prisma.$transaction(async (tx) => {
-    const createdShow = await tx.show.create({
-      data: {
-        eventId,
-        date: req.body.date,
-        time: req.body.time
+  const show = await prisma.$transaction(
+    async (tx) => {
+      const createdShow = await tx.show.create({
+        data: {
+          eventId,
+          date: req.body.date,
+          time: req.body.time
+        }
+      });
+
+      const seatLayouts = await tx.seatLayout.findMany({
+        where: { venueId: event.venueId },
+        select: { id: true }
+      });
+
+      if (seatLayouts.length > 0) {
+        await tx.showSeat.createMany({
+          data: seatLayouts.map((seatLayout) => ({
+            showId: createdShow.id,
+            seatLayoutId: seatLayout.id
+          }))
+        });
       }
-    });
 
-    const seatLayouts = await tx.seatLayout.findMany({
-      where: { venueId: event.venueId },
-      select: { id: true }
-    });
+      if (req.body.categoryPrices?.length) {
+        await tx.showSeatPricing.createMany({
+          data: req.body.categoryPrices.map((price: { category: string; price: number }) => ({
+            showId: createdShow.id,
+            category: price.category,
+            price: price.price
+          }))
+        });
+      }
 
-    if (seatLayouts.length > 0) {
-      await tx.showSeat.createMany({
-        data: seatLayouts.map((seatLayout) => ({
-          showId: createdShow.id,
-          seatLayoutId: seatLayout.id
-        }))
-      });
+      return createdShow;
+    },
+    {
+      maxWait: 10000,
+      timeout: 20000
     }
-
-    if (req.body.categoryPrices?.length) {
-      await tx.showSeatPricing.createMany({
-        data: req.body.categoryPrices.map((price: { category: string; price: number }) => ({
-          showId: createdShow.id,
-          category: price.category,
-          price: price.price
-        }))
-      });
-    }
-
-    return createdShow;
-  });
+  );
 
   res.status(201).json({ show });
 };

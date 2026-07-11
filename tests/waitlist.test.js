@@ -154,6 +154,55 @@ afterAll(async () => {
 });
 
 describe("waitlist", () => {
+  test("active waitlist-held seat is not released by immediate cron run", async () => {
+    const { originalCustomer, bookingId, showId, showSeatId } = await createBookedSoldOutShow();
+    const firstWaitlisted = await createUserSession("CUSTOMER", "waitlist-active");
+
+    const joinResponse = await request(app)
+      .post("/waitlist")
+      .set("Authorization", `Bearer ${firstWaitlisted.token}`)
+      .send({ showId, category: "STANDARD" });
+    expect(joinResponse.status).toBe(201);
+
+    const cancelResponse = await request(app)
+      .delete(`/bookings/${bookingId}`)
+      .set("Authorization", `Bearer ${originalCustomer.token}`)
+      .send();
+    expect(cancelResponse.status).toBe(200);
+
+    const activeOfferBeforeCron = await prisma.waitlist.findUniqueOrThrow({
+      where: { id: joinResponse.body.waitlist.id }
+    });
+    expect(activeOfferBeforeCron.status).toBe("OFFERED");
+    expect(activeOfferBeforeCron.offeredSeatId).toBe(showSeatId);
+    expect(activeOfferBeforeCron.offerExpiresAt.getTime()).toBeGreaterThan(Date.now());
+
+    const heldBeforeCron = await prisma.showSeat.findUniqueOrThrow({
+      where: { id: showSeatId }
+    });
+    expect(heldBeforeCron.status).toBe("HELD");
+    expect(heldBeforeCron.heldBy).toBe(firstWaitlisted.user.id);
+    expect(heldBeforeCron.heldUntil.getTime()).toBeGreaterThan(Date.now());
+
+    await releaseExpiredHolds();
+
+    const activeOfferAfterCron = await prisma.waitlist.findUniqueOrThrow({
+      where: { id: joinResponse.body.waitlist.id }
+    });
+    expect(activeOfferAfterCron.status).toBe("OFFERED");
+    expect(activeOfferAfterCron.offeredSeatId).toBe(showSeatId);
+    expect(activeOfferAfterCron.offerExpiresAt.getTime()).toBe(
+      activeOfferBeforeCron.offerExpiresAt.getTime()
+    );
+
+    const heldAfterCron = await prisma.showSeat.findUniqueOrThrow({
+      where: { id: showSeatId }
+    });
+    expect(heldAfterCron.status).toBe("HELD");
+    expect(heldAfterCron.heldBy).toBe(firstWaitlisted.user.id);
+    expect(heldAfterCron.heldUntil.getTime()).toBe(heldBeforeCron.heldUntil.getTime());
+  });
+
   test("cancellation offers freed seat to first waitlisted customer and cron expiry cascades to the next", async () => {
     const { originalCustomer, bookingId, showId, showSeatId } = await createBookedSoldOutShow();
     const firstWaitlisted = await createUserSession("CUSTOMER", "waitlist-first");
