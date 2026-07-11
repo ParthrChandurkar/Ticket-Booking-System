@@ -18,6 +18,62 @@ export const createEvent = async (req: Request, res: Response) => {
   res.status(201).json({ event });
 };
 
+export const listPublicEvents = async (req: Request, res: Response) => {
+  const search = typeof req.query.search === "string" ? req.query.search : undefined;
+  const events = await prisma.event.findMany({
+    where: search
+      ? {
+          OR: [
+            { title: { contains: search, mode: "insensitive" } },
+            { description: { contains: search, mode: "insensitive" } }
+          ]
+        }
+      : undefined,
+    include: {
+      shows: {
+        orderBy: [{ date: "asc" }, { time: "asc" }],
+        include: { pricing: true }
+      }
+    },
+    orderBy: { createdAt: "desc" }
+  });
+
+  const venueIds = Array.from(new Set(events.map((event) => event.venueId)));
+  const venues = await prisma.venue.findMany({
+    where: { id: { in: venueIds } }
+  });
+  const venueById = new Map(venues.map((venue) => [venue.id, venue]));
+
+  res.json({
+    events: events.map((event) => ({
+      ...event,
+      venue: venueById.get(event.venueId) ?? null
+    }))
+  });
+};
+
+export const getPublicEvent = async (req: Request, res: Response) => {
+  const id = getRouteParam(req, "id");
+  const event = await prisma.event.findUnique({
+    where: { id },
+    include: {
+      shows: {
+        orderBy: [{ date: "asc" }, { time: "asc" }],
+        include: { pricing: true }
+      }
+    }
+  });
+  if (!event) {
+    throw new HttpError(404, "Event not found");
+  }
+
+  const venue = await prisma.venue.findUnique({
+    where: { id: event.venueId }
+  });
+
+  res.json({ event: { ...event, venue } });
+};
+
 export const listEvents = async (req: Request, res: Response) => {
   const user = getAuthUser(req);
   const events = await prisma.event.findMany({

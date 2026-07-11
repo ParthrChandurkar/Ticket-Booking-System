@@ -3,11 +3,22 @@ import { errorHandler, notFound } from "./middleware/errorHandler";
 import { authRouter } from "./modules/auth/auth.routes";
 import { bookingRouter } from "./modules/bookings/booking.routes";
 import { eventRouter } from "./modules/events/event.routes";
+import { organiserRouter } from "./modules/organiser/organiser.routes";
 import { showRouter } from "./modules/shows/show.routes";
 import { venueRouter } from "./modules/venues/venue.routes";
 import { waitlistRouter } from "./modules/waitlist/waitlist.routes";
 
 export const app = express();
+
+app.use((req, res, next) => {
+  res.header("Access-Control-Allow-Origin", process.env.CORS_ORIGIN ?? "http://localhost:5173");
+  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+  if (req.method === "OPTIONS") {
+    return res.send();
+  }
+  return next();
+});
 
 app.use(express.json());
 
@@ -19,6 +30,7 @@ app.use("/auth", authRouter);
 app.use("/bookings", bookingRouter);
 app.use("/venues", venueRouter);
 app.use("/events", eventRouter);
+app.use("/organiser", organiserRouter);
 app.use("/shows", showRouter);
 app.use("/waitlist", waitlistRouter);
 

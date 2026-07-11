@@ -17,6 +17,31 @@ export const createVenue = async (req: Request, res: Response) => {
   res.status(201).json({ venue });
 };
 
+export const createSeatLayouts = async (req: Request, res: Response) => {
+  const venueId = getRouteParam(req, "id");
+  const venue = await prisma.venue.findUnique({ where: { id: venueId } });
+  if (!venue) {
+    throw new HttpError(404, "Venue not found");
+  }
+
+  await prisma.seatLayout.createMany({
+    data: req.body.seats.map((seat: { rowLabel: string; seatNumber: number; category: string }) => ({
+      venueId,
+      rowLabel: seat.rowLabel,
+      seatNumber: seat.seatNumber,
+      category: seat.category
+    })),
+    skipDuplicates: true
+  });
+
+  const seatLayouts = await prisma.seatLayout.findMany({
+    where: { venueId },
+    orderBy: [{ rowLabel: "asc" }, { seatNumber: "asc" }]
+  });
+
+  res.status(201).json({ seatLayouts });
+};
+
 export const listVenues = async (_req: Request, res: Response) => {
   const venues = await prisma.venue.findMany({
     orderBy: { createdAt: "desc" }
@@ -28,7 +53,8 @@ export const listVenues = async (_req: Request, res: Response) => {
 export const getVenue = async (req: Request, res: Response) => {
   const id = getRouteParam(req, "id");
   const venue = await prisma.venue.findUnique({
-    where: { id }
+    where: { id },
+    include: { seatLayouts: { orderBy: [{ rowLabel: "asc" }, { seatNumber: "asc" }] } }
   });
   if (!venue) {
     throw new HttpError(404, "Venue not found");

@@ -101,6 +101,10 @@ export const listShowSeats = async (req: Request, res: Response) => {
       { seatLayout: { seatNumber: "asc" } }
     ]
   });
+  const pricing = await prisma.showSeatPricing.findMany({
+    where: { showId }
+  });
+  const priceByCategory = new Map(pricing.map((price) => [price.category, price.price]));
 
   res.json({
     seats: seats.map((seat) => ({
@@ -108,10 +112,12 @@ export const listShowSeats = async (req: Request, res: Response) => {
       showId: seat.showId,
       seatLayoutId: seat.seatLayoutId,
       status: seat.status,
+      heldBy: seat.heldBy,
       heldUntil: seat.heldUntil,
       rowLabel: seat.seatLayout.rowLabel,
       seatNumber: seat.seatLayout.seatNumber,
-      category: seat.seatLayout.category
+      category: seat.seatLayout.category,
+      price: priceByCategory.get(seat.seatLayout.category) ?? 0
     }))
   });
 };

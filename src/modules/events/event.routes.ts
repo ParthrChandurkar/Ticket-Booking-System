@@ -9,12 +9,17 @@ import {
   createEvent,
   deleteEvent,
   getEvent,
+  getPublicEvent,
+  listPublicEvents,
   listEvents,
   updateEvent
 } from "./event.controller";
 import { eventCreateSchema, eventUpdateSchema } from "./event.schemas";
 
 export const eventRouter = express.Router();
+
+eventRouter.get("/public", asyncHandler(listPublicEvents));
+eventRouter.get("/public/:id", asyncHandler(getPublicEvent));
 
 eventRouter.use(requireAuth, requireRole(Role.ORGANISER));
 eventRouter.post("/", validateBody(eventCreateSchema), asyncHandler(createEvent));
