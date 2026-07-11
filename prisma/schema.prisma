@@ -114,3 +114,22 @@ model BookingSeat {
   booking    Booking @relation(fields: [bookingId], references: [id])
   showSeatId String
 }
+
+model Waitlist {
+  id             String         @id @default(uuid())
+  customerId     String
+  showId         String
+  category       String
+  status         WaitlistStatus @default(WAITING)
+  position       Int
+  offeredSeatId  String?
+  offerExpiresAt DateTime?
+  createdAt      DateTime       @default(now())
+}
+
+enum WaitlistStatus {
+  WAITING
+  OFFERED
+  EXPIRED
+  FULFILLED
+}

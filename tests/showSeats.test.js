@@ -9,7 +9,7 @@ jest.setTimeout(30000);
 
 const cleanDatabase = async () => {
   await prisma.$executeRawUnsafe(
-    'TRUNCATE TABLE "BookingSeat", "Booking", "ShowSeatPricing", "ShowSeat", "Show", "Event", "SeatLayout", "Venue", "User" RESTART IDENTITY CASCADE'
+    'TRUNCATE TABLE "Waitlist", "BookingSeat", "Booking", "ShowSeatPricing", "ShowSeat", "Show", "Event", "SeatLayout", "Venue", "User" RESTART IDENTITY CASCADE'
   );
 };
 
