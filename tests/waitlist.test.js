@@ -1,6 +1,5 @@
 const jwt = require("jsonwebtoken");
 const request = require("supertest");
-const { PrismaClient } = require("@prisma/client");
 
 const mockSend = jest.fn(async () => ({
   data: { id: "email-id" },
@@ -21,16 +20,9 @@ jest.mock("../dist/src/utils/sleep", () => ({
 
 const { app } = require("../dist/src/app");
 const { releaseExpiredHolds } = require("../dist/src/utils/expiredHoldJob");
-
-const prisma = new PrismaClient();
+const { cleanDatabase, prisma } = require("./testDb");
 
 jest.setTimeout(90000);
-
-const cleanDatabase = async () => {
-  await prisma.$executeRawUnsafe(
-    'TRUNCATE TABLE "Waitlist", "BookingSeat", "Booking", "ShowSeatPricing", "ShowSeat", "Show", "Event", "SeatLayout", "Venue", "User" RESTART IDENTITY CASCADE'
-  );
-};
 
 const accessToken = (user) =>
   jwt.sign(

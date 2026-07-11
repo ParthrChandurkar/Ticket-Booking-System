@@ -45,10 +45,25 @@ if (databaseUrl && databaseUrl === testDatabaseUrl) {
   process.exit(1);
 }
 
+const withTestConnectionLimit = (url) => {
+  const parsed = new URL(url);
+  if (!parsed.searchParams.has("connection_limit")) {
+    parsed.searchParams.set("connection_limit", "2");
+  }
+  if (!parsed.searchParams.has("pool_timeout")) {
+    parsed.searchParams.set("pool_timeout", "20");
+  }
+
+  return parsed.toString();
+};
+
+const limitedTestDatabaseUrl = withTestConnectionLimit(testDatabaseUrl);
+
 const commandEnv = {
   ...process.env,
   ...fileEnv,
-  DATABASE_URL: testDatabaseUrl,
+  DATABASE_URL: limitedTestDatabaseUrl,
+  TEST_DATABASE_URL: limitedTestDatabaseUrl,
   NODE_ENV: "test"
 };
 

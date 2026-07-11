@@ -16,37 +16,43 @@ const releaseExpiredWaitlistOffers = async () => {
   let expiredCount = 0;
 
   for (const offer of expiredOffers) {
-    const expired = await prisma.$transaction(async (tx) => {
-      const updatedWaitlist = await tx.waitlist.updateMany({
-        where: {
-          id: offer.id,
-          status: WaitlistStatus.OFFERED,
-          offerExpiresAt: { lt: new Date() }
-        },
-        data: {
-          status: WaitlistStatus.EXPIRED
-        }
-      });
+    const expired = await prisma.$transaction(
+      async (tx) => {
+        const updatedWaitlist = await tx.waitlist.updateMany({
+          where: {
+            id: offer.id,
+            status: WaitlistStatus.OFFERED,
+            offerExpiresAt: { lt: new Date() }
+          },
+          data: {
+            status: WaitlistStatus.EXPIRED
+          }
+        });
 
-      if (updatedWaitlist.count === 0 || !offer.offeredSeatId) {
-        return false;
+        if (updatedWaitlist.count === 0 || !offer.offeredSeatId) {
+          return false;
+        }
+
+        await tx.showSeat.updateMany({
+          where: {
+            id: offer.offeredSeatId,
+            status: "HELD",
+            heldBy: offer.customerId
+          },
+          data: {
+            status: "AVAILABLE",
+            heldBy: null,
+            heldUntil: null
+          }
+        });
+
+        return true;
+      },
+      {
+        maxWait: 10000,
+        timeout: 20000
       }
-
-      await tx.showSeat.updateMany({
-        where: {
-          id: offer.offeredSeatId,
-          status: "HELD",
-          heldBy: offer.customerId
-        },
-        data: {
-          status: "AVAILABLE",
-          heldBy: null,
-          heldUntil: null
-        }
-      });
-
-      return true;
-    });
+    );
 
     if (expired) {
       expiredCount += 1;

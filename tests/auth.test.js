@@ -1,18 +1,10 @@
 const request = require("supertest");
-const { PrismaClient } = require("@prisma/client");
 const { app } = require("../dist/src/app");
+const { cleanDatabase, prisma } = require("./testDb");
 
-const prisma = new PrismaClient();
-
-jest.setTimeout(30000);
+jest.setTimeout(90000);
 
 const uniqueEmail = (prefix) => `${prefix}.${Date.now()}.${Math.random()}@example.com`;
-
-const cleanDatabase = async () => {
-  await prisma.$executeRawUnsafe(
-    'TRUNCATE TABLE "Waitlist", "BookingSeat", "Booking", "ShowSeatPricing", "ShowSeat", "Show", "Event", "SeatLayout", "Venue", "User" RESTART IDENTITY CASCADE'
-  );
-};
 
 beforeAll(() => {
   expect(process.env.NODE_ENV).toBe("test");

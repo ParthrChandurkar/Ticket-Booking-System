@@ -69,54 +69,60 @@ export const cancelBooking = async (req: Request, res: Response) => {
   const user = getAuthUser(req);
   const bookingId = getRouteParam(req, "id");
 
-  const result = await prisma.$transaction(async (tx) => {
-    const booking = await tx.booking.findFirst({
-      where: {
-        id: bookingId,
-        customerId: user.id
-      },
-      include: { seats: true }
-    });
+  const result = await prisma.$transaction(
+    async (tx) => {
+      const booking = await tx.booking.findFirst({
+        where: {
+          id: bookingId,
+          customerId: user.id
+        },
+        include: { seats: true }
+      });
 
-    if (!booking) {
-      throw new HttpError(404, "Booking not found");
-    }
-
-    if (booking.status === BookingStatus.CANCELLED) {
-      return { booking, categories: [] as string[] };
-    }
-
-    const showSeatIds = booking.seats.map((seat) => seat.showSeatId);
-    const showSeats = await tx.showSeat.findMany({
-      where: { id: { in: showSeatIds } },
-      include: { seatLayout: true }
-    });
-
-    await tx.booking.update({
-      where: { id: booking.id },
-      data: { status: BookingStatus.CANCELLED }
-    });
-
-    await tx.showSeat.updateMany({
-      where: {
-        id: { in: showSeatIds },
-        status: SeatStatus.BOOKED
-      },
-      data: {
-        status: SeatStatus.AVAILABLE,
-        heldBy: null,
-        heldUntil: null
+      if (!booking) {
+        throw new HttpError(404, "Booking not found");
       }
-    });
 
-    return {
-      booking: {
-        ...booking,
-        status: BookingStatus.CANCELLED
-      },
-      categories: uniqueValues(showSeats.map((seat) => seat.seatLayout.category))
-    };
-  });
+      if (booking.status === BookingStatus.CANCELLED) {
+        return { booking, categories: [] as string[] };
+      }
+
+      const showSeatIds = booking.seats.map((seat) => seat.showSeatId);
+      const showSeats = await tx.showSeat.findMany({
+        where: { id: { in: showSeatIds } },
+        include: { seatLayout: true }
+      });
+
+      await tx.booking.update({
+        where: { id: booking.id },
+        data: { status: BookingStatus.CANCELLED }
+      });
+
+      await tx.showSeat.updateMany({
+        where: {
+          id: { in: showSeatIds },
+          status: SeatStatus.BOOKED
+        },
+        data: {
+          status: SeatStatus.AVAILABLE,
+          heldBy: null,
+          heldUntil: null
+        }
+      });
+
+      return {
+        booking: {
+          ...booking,
+          status: BookingStatus.CANCELLED
+        },
+        categories: uniqueValues(showSeats.map((seat) => seat.seatLayout.category))
+      };
+    },
+    {
+      maxWait: 10000,
+      timeout: 20000
+    }
+  );
 
   await Promise.all(
     result.categories.map((category) => checkWaitlistForShow(result.booking.showId, category))
