@@ -53,6 +53,8 @@ const createUserSession = async (role, prefix) => {
   };
 };
 
+const futureDateIso = () => new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString();
+
 const createBookedSoldOutShow = async () => {
   const admin = await createUserSession("ADMIN", "waitlist-admin");
   const organiser = await createUserSession("ORGANISER", "waitlist-organiser");
@@ -90,7 +92,7 @@ const createBookedSoldOutShow = async () => {
     .post(`/events/${eventResponse.body.event.id}/shows`)
     .set("Authorization", `Bearer ${organiser.token}`)
     .send({
-      date: "2026-10-01T00:00:00.000Z",
+      date: futureDateIso(),
       time: "18:00",
       categoryPrices: [{ category: "STANDARD", price: 30 }]
     });

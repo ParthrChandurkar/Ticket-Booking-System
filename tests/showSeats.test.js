@@ -17,6 +17,8 @@ const accessToken = (user) =>
     { expiresIn: "15m" }
   );
 
+const futureDateIso = () => new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+
 const setupShowWithSeat = async () => {
   const organiser = await prisma.user.create({
     data: {
@@ -57,8 +59,9 @@ const setupShowWithSeat = async () => {
     .post(`/events/${event.id}/shows`)
     .set("Authorization", `Bearer ${accessToken(organiser)}`)
     .send({
-      date: "2026-08-01T00:00:00.000Z",
-      time: "19:30"
+      date: futureDateIso(),
+      time: "19:30",
+      categoryPrices: [{ category: "STANDARD", price: 25 }]
     });
 
   expect(showResponse.status).toBe(201);

@@ -53,12 +53,12 @@ const registerAndLogin = async (role, prefix) => {
   await request(app).post("/auth/register").send({
     name: `${role} User`,
     email,
-    password: "password123"
+    password: "Password123"
   });
 
   const loginResponse = await request(app).post("/auth/login").send({
     email,
-    password: "password123"
+    password: "Password123"
   });
 
   expect(loginResponse.status).toBe(200);
@@ -67,6 +67,8 @@ const registerAndLogin = async (role, prefix) => {
     user: loginResponse.body.user
   };
 };
+
+const futureDateIso = () => new Date(Date.now() + 45 * 24 * 60 * 60 * 1000).toISOString();
 
 const createShowWithHeldSeats = async ({
   expired = false,
@@ -113,7 +115,7 @@ const createShowWithHeldSeats = async ({
     .post(`/events/${eventResponse.body.event.id}/shows`)
     .set("Authorization", `Bearer ${organiser.token}`)
     .send({
-      date: "2026-09-01T00:00:00.000Z",
+      date: futureDateIso(),
       time: "20:00",
       categoryPrices
     });

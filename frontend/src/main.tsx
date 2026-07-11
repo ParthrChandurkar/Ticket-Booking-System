@@ -123,6 +123,26 @@ const go = (path: string) => {
   location.hash = `#${path}`;
 };
 
+const requiredText = (label: string) => z.string().trim().min(1, `${label} is required`);
+const passwordSchema = z
+  .string()
+  .min(8, "Password must be at least 8 characters")
+  .regex(/[A-Z]/, "Password must include an uppercase letter")
+  .regex(/[a-z]/, "Password must include a lowercase letter")
+  .regex(/[0-9]/, "Password must include a number");
+const timeSchema = z.string().trim().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Use HH:mm time");
+const futureDateSchema = z.string().min(1, "Date is required").refine(
+  (value) => new Date(`${value}T00:00:00`).getTime() > Date.now(),
+  "Date must be in the future"
+);
+
+const zodMessage = (error: unknown) => {
+  if (error instanceof z.ZodError) {
+    return error.issues[0]?.message ?? "Validation failed";
+  }
+  return error instanceof Error ? error.message : "Request failed";
+};
+
 const Field = ({
   label,
   error,
@@ -139,9 +159,10 @@ const Field = ({
   </label>
 );
 
-const loginSchema = z.object({ email: z.string().email(), password: z.string().min(1) });
+const loginSchema = z.object({ email: z.string().trim().email(), password: z.string().min(1) });
 const registerSchema = loginSchema.extend({
-  name: z.string().min(2)
+  name: requiredText("Full name"),
+  password: passwordSchema
 });
 
 const LogoMark = ({ compact = false }: { compact?: boolean }) => (
@@ -477,11 +498,23 @@ function BookingsPage() {
   );
 }
 
-const eventFormSchema = z.object({ venueId: z.string().uuid(), title: z.string().min(2), description: z.string().min(5) });
+const eventFormSchema = z.object({
+  venueId: z.string().uuid("Select a venue"),
+  title: requiredText("Event title"),
+  description: requiredText("Event description")
+});
+const showFormSchema = z.object({
+  eventId: z.string().uuid("Select an event"),
+  date: futureDateSchema,
+  time: timeSchema,
+  categoryPrices: requiredText("Category pricing")
+});
 
 function OrganiserPage() {
   const [eventForm, setEventForm] = React.useState({ venueId: "", title: "", description: "" });
   const [showForm, setShowForm] = React.useState({ eventId: "", date: "", time: "", categoryPrices: "STANDARD:30" });
+  const [eventError, setEventError] = React.useState("");
+  const [showError, setShowError] = React.useState("");
   const { data: events, refetch } = useQuery({ queryKey: ["my-events"], queryFn: () => api<{ events: EventItem[] }>("/events") });
   const { data: venues } = useQuery({ queryKey: ["organiser-venues"], queryFn: () => api<{ venues: { id: string; name: string }[] }>("/organiser/venues") });
   const [summaryEventId, setSummaryEventId] = React.useState("");
@@ -491,21 +524,35 @@ function OrganiserPage() {
     enabled: Boolean(summaryEventId)
   });
   const createEvent = async () => {
-    eventFormSchema.parse(eventForm);
-    await api("/events", { method: "POST", body: JSON.stringify(eventForm) });
-    setEventForm({ venueId: "", title: "", description: "" });
-    refetch();
+    try {
+      setEventError("");
+      eventFormSchema.parse(eventForm);
+      await api("/events", { method: "POST", body: JSON.stringify(eventForm) });
+      setEventForm({ venueId: "", title: "", description: "" });
+      refetch();
+    } catch (error) {
+      setEventError(zodMessage(error));
+    }
   };
   const createShow = async () => {
-    const categoryPrices = showForm.categoryPrices.split(",").map((item) => {
-      const [category, price] = item.split(":");
-      return { category: category.trim(), price: Number(price) };
-    });
-    await api(`/events/${showForm.eventId}/shows`, {
-      method: "POST",
-      body: JSON.stringify({ date: showForm.date, time: showForm.time, categoryPrices })
-    });
-    refetch();
+    try {
+      setShowError("");
+      showFormSchema.parse(showForm);
+      const categoryPrices = showForm.categoryPrices.split(",").map((item) => {
+        const [category, price] = item.split(":");
+        if (!category?.trim() || !price || Number(price) <= 0) {
+          throw new Error("Use category:price pairs with positive prices");
+        }
+        return { category: category.trim(), price: Number(price) };
+      });
+      await api(`/events/${showForm.eventId}/shows`, {
+        method: "POST",
+        body: JSON.stringify({ date: showForm.date, time: showForm.time, categoryPrices })
+      });
+      refetch();
+    } catch (error) {
+      setShowError(zodMessage(error));
+    }
   };
   return (
     <Shell>
@@ -519,6 +566,7 @@ function OrganiserPage() {
           </select>
           <input placeholder="Title" value={eventForm.title} onChange={(e) => setEventForm({ ...eventForm, title: e.target.value })} />
           <textarea placeholder="Description" value={eventForm.description} onChange={(e) => setEventForm({ ...eventForm, description: e.target.value })} />
+          {eventError && <p className="form-error">{eventError}</p>}
           <button className="primary-button" onClick={createEvent}>Create event</button>
         </div>
         <div className="panel">
@@ -530,6 +578,7 @@ function OrganiserPage() {
           <input type="date" value={showForm.date} onChange={(e) => setShowForm({ ...showForm, date: e.target.value })} />
           <input value={showForm.time} onChange={(e) => setShowForm({ ...showForm, time: e.target.value })} placeholder="19:30" />
           <input value={showForm.categoryPrices} onChange={(e) => setShowForm({ ...showForm, categoryPrices: e.target.value })} />
+          {showError && <p className="form-error">{showError}</p>}
           <button className="primary-button" onClick={createShow}>Create show</button>
         </div>
       </section>
@@ -548,21 +597,49 @@ function OrganiserPage() {
 function AdminPage() {
   const [venue, setVenue] = React.useState({ name: "", address: "" });
   const [layout, setLayout] = React.useState({ venueId: "", rows: "A,B,C", seatsPerRow: 10, category: "STANDARD" });
+  const [venueError, setVenueError] = React.useState("");
+  const [layoutError, setLayoutError] = React.useState("");
   const { data, refetch } = useQuery({ queryKey: ["admin-venues"], queryFn: () => api<{ venues: { id: string; name: string }[] }>("/venues") });
+  const venueFormSchema = z.object({
+    name: requiredText("Venue name"),
+    address: requiredText("Venue address")
+  });
+  const layoutFormSchema = z.object({
+    venueId: z.string().uuid("Select a venue"),
+    rows: requiredText("Rows"),
+    seatsPerRow: z.number().int().positive("Seats per row must be positive"),
+    category: requiredText("Category")
+  });
   const createVenue = async () => {
-    await api("/venues", { method: "POST", body: JSON.stringify(venue) });
-    setVenue({ name: "", address: "" });
-    refetch();
+    try {
+      setVenueError("");
+      venueFormSchema.parse(venue);
+      await api("/venues", { method: "POST", body: JSON.stringify(venue) });
+      setVenue({ name: "", address: "" });
+      refetch();
+    } catch (error) {
+      setVenueError(zodMessage(error));
+    }
   };
   const createLayout = async () => {
-    const seats = layout.rows.split(",").flatMap((row) =>
-      Array.from({ length: Number(layout.seatsPerRow) }, (_, index) => ({
-        rowLabel: row.trim(),
-        seatNumber: index + 1,
-        category: layout.category
-      }))
-    );
-    await api(`/venues/${layout.venueId}/seat-layouts`, { method: "POST", body: JSON.stringify({ seats }) });
+    try {
+      setLayoutError("");
+      layoutFormSchema.parse(layout);
+      const rows = layout.rows.split(",").map((row) => row.trim()).filter(Boolean);
+      if (!rows.length) {
+        throw new Error("At least one row is required");
+      }
+      const seats = rows.flatMap((row) =>
+        Array.from({ length: Number(layout.seatsPerRow) }, (_, index) => ({
+          rowLabel: row,
+          seatNumber: index + 1,
+          category: layout.category.trim()
+        }))
+      );
+      await api(`/venues/${layout.venueId}/seat-layouts`, { method: "POST", body: JSON.stringify({ seats }) });
+    } catch (error) {
+      setLayoutError(zodMessage(error));
+    }
   };
   return (
     <Shell>
@@ -572,6 +649,7 @@ function AdminPage() {
           <h2>Create venue</h2>
           <input placeholder="Venue name" value={venue.name} onChange={(e) => setVenue({ ...venue, name: e.target.value })} />
           <input placeholder="Address" value={venue.address} onChange={(e) => setVenue({ ...venue, address: e.target.value })} />
+          {venueError && <p className="form-error">{venueError}</p>}
           <button className="primary-button" onClick={createVenue}>Create venue</button>
         </div>
         <div className="panel">
@@ -583,6 +661,7 @@ function AdminPage() {
           <input value={layout.rows} onChange={(e) => setLayout({ ...layout, rows: e.target.value })} />
           <input type="number" value={layout.seatsPerRow} onChange={(e) => setLayout({ ...layout, seatsPerRow: Number(e.target.value) })} />
           <input value={layout.category} onChange={(e) => setLayout({ ...layout, category: e.target.value })} />
+          {layoutError && <p className="form-error">{layoutError}</p>}
           <button className="primary-button" onClick={createLayout}>Generate seats</button>
         </div>
       </section>

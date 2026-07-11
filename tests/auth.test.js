@@ -28,7 +28,7 @@ describe("auth", () => {
     const response = await request(app).post("/auth/register").send({
       name: "Test Customer",
       email,
-      password: "password123"
+      password: "Password123"
     });
 
     expect(response.status).toBe(201);
@@ -38,7 +38,7 @@ describe("auth", () => {
 
     const user = await prisma.user.findUnique({ where: { email } });
     expect(user).not.toBeNull();
-    expect(user.passwordHash).not.toBe("password123");
+    expect(user.passwordHash).not.toBe("Password123");
     expect(user.passwordHash.startsWith("$2")).toBe(true);
   });
 
@@ -48,7 +48,7 @@ describe("auth", () => {
     const response = await request(app).post("/auth/register").send({
       name: "Role Escalation Attempt",
       email,
-      password: "password123",
+      password: "Password123",
       role: "ADMIN"
     });
 
@@ -65,7 +65,7 @@ describe("auth", () => {
     const forbidden = await request(app).post("/auth/register-organiser").send({
       name: "No Code Organiser",
       email,
-      password: "password123",
+      password: "Password123",
       organiserSignupCode: "wrong-code"
     });
     expect(forbidden.status).toBe(403);
@@ -73,7 +73,7 @@ describe("auth", () => {
     const response = await request(app).post("/auth/register-organiser").send({
       name: "Invited Organiser",
       email,
-      password: "password123",
+      password: "Password123",
       organiserSignupCode: process.env.ORGANISER_SIGNUP_CODE
     });
 
@@ -87,12 +87,12 @@ describe("auth", () => {
     await request(app).post("/auth/register").send({
       name: "Login Customer",
       email,
-      password: "password123"
+      password: "Password123"
     });
 
     const response = await request(app).post("/auth/login").send({
       email,
-      password: "password123"
+      password: "Password123"
     });
 
     expect(response.status).toBe(200);
@@ -107,12 +107,12 @@ describe("auth", () => {
     await request(app).post("/auth/register").send({
       name: "Wrong Role",
       email,
-      password: "password123"
+      password: "Password123"
     });
 
     const loginResponse = await request(app).post("/auth/login").send({
       email,
-      password: "password123"
+      password: "Password123"
     });
 
     const response = await request(app)

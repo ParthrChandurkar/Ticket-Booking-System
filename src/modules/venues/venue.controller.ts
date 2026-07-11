@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { Request, Response } from "express";
 import { prisma } from "../../config/prisma";
 import { getAuthUser } from "../../utils/getAuthUser";
@@ -24,15 +25,23 @@ export const createSeatLayouts = async (req: Request, res: Response) => {
     throw new HttpError(404, "Venue not found");
   }
 
-  await prisma.seatLayout.createMany({
-    data: req.body.seats.map((seat: { rowLabel: string; seatNumber: number; category: string }) => ({
-      venueId,
-      rowLabel: seat.rowLabel,
-      seatNumber: seat.seatNumber,
-      category: seat.category
-    })),
-    skipDuplicates: true
-  });
+  try {
+    await prisma.seatLayout.createMany({
+      data: req.body.seats.map((seat: { rowLabel: string; seatNumber: number; category: string }) => ({
+        venueId,
+        rowLabel: seat.rowLabel,
+        seatNumber: seat.seatNumber,
+        category: seat.category
+      }))
+    });
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      throw new HttpError(400, "Validation failed", {
+        seats: ["Seat layout contains a duplicate row label and seat number"]
+      });
+    }
+    throw error;
+  }
 
   const seatLayouts = await prisma.seatLayout.findMany({
     where: { venueId },

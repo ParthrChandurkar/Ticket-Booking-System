@@ -38,6 +38,48 @@ export const createShow = async (req: Request, res: Response) => {
     throw new HttpError(404, "Event not found");
   }
 
+  const venueCategories = await prisma.seatLayout.findMany({
+    where: { venueId: event.venueId },
+    select: { category: true },
+    distinct: ["category"]
+  });
+  const requiredCategories = venueCategories.map((seatLayout) => seatLayout.category);
+  if (requiredCategories.length === 0) {
+    throw new HttpError(400, "Validation failed", {
+      categoryPrices: ["Venue must have a seat layout before a show can be created"]
+    });
+  }
+
+  const submittedCategories = req.body.categoryPrices.map(
+    (price: { category: string }) => price.category
+  );
+  const duplicateCategories = submittedCategories.filter(
+    (category: string, index: number) => submittedCategories.indexOf(category) !== index
+  );
+  if (duplicateCategories.length > 0) {
+    throw new HttpError(400, "Validation failed", {
+      categoryPrices: [`Duplicate price for category ${duplicateCategories[0]}`]
+    });
+  }
+
+  const missingCategories = requiredCategories.filter(
+    (category) => !submittedCategories.includes(category)
+  );
+  if (missingCategories.length > 0) {
+    throw new HttpError(400, "Validation failed", {
+      categoryPrices: [`Missing price for category ${missingCategories[0]}`]
+    });
+  }
+
+  const unknownCategories = submittedCategories.filter(
+    (category: string) => !requiredCategories.includes(category)
+  );
+  if (unknownCategories.length > 0) {
+    throw new HttpError(400, "Validation failed", {
+      categoryPrices: [`Unknown category ${unknownCategories[0]} for this venue`]
+    });
+  }
+
   const show = await prisma.$transaction(
     async (tx) => {
       const createdShow = await tx.show.create({
@@ -62,15 +104,13 @@ export const createShow = async (req: Request, res: Response) => {
         });
       }
 
-      if (req.body.categoryPrices?.length) {
-        await tx.showSeatPricing.createMany({
-          data: req.body.categoryPrices.map((price: { category: string; price: number }) => ({
-            showId: createdShow.id,
-            category: price.category,
-            price: price.price
-          }))
-        });
-      }
+      await tx.showSeatPricing.createMany({
+        data: req.body.categoryPrices.map((price: { category: string; price: number }) => ({
+          showId: createdShow.id,
+          category: price.category,
+          price: price.price
+        }))
+      });
 
       return createdShow;
     },
