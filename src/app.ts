@@ -11,7 +11,16 @@ import { waitlistRouter } from "./modules/waitlist/waitlist.routes";
 export const app = express();
 
 app.use((req, res, next) => {
-  res.header("Access-Control-Allow-Origin", process.env.CORS_ORIGIN ?? "http://localhost:5173");
+  const allowedOrigins = (process.env.CORS_ORIGIN ?? "http://localhost:5173,http://127.0.0.1:5173")
+    .split(",")
+    .map((origin) => origin.trim());
+  const requestOrigin = req.headers.origin;
+
+  if (typeof requestOrigin === "string" && allowedOrigins.includes(requestOrigin)) {
+    res.header("Access-Control-Allow-Origin", requestOrigin);
+  }
+
+  res.header("Vary", "Origin");
   res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
   res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
   if (req.method === "OPTIONS") {
