@@ -32,6 +32,30 @@ export const requireAuth = (req: Request, res: Response, next: NextFunction) => 
   }
 };
 
+export const optionalAuth = (req: Request, _res: Response, next: NextFunction) => {
+  const header = req.headers.authorization;
+  const value = Array.isArray(header) ? header[0] : header;
+
+  if (!value || !value.startsWith("Bearer ")) {
+    return next();
+  }
+
+  try {
+    const payload = verifyToken(value.slice("Bearer ".length));
+    if (payload.type === "access") {
+      (req as RequestWithUser).user = {
+        id: payload.sub,
+        email: payload.email,
+        role: payload.role
+      };
+    }
+  } catch {
+    // Public endpoints stay public; invalid optional auth is treated as anonymous.
+  }
+
+  return next();
+};
+
 export const requireRole =
   (...roles: Role[]) =>
   (req: Request, res: Response, next: NextFunction) => {

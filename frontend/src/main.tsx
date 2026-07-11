@@ -29,7 +29,7 @@ type Seat = {
   id: string;
   showId: string;
   status: "AVAILABLE" | "HELD" | "BOOKED";
-  heldBy: string | null;
+  isHeldByMe: boolean;
   heldUntil: string | null;
   rowLabel: string;
   seatNumber: number;
@@ -354,7 +354,7 @@ function SeatMapPage({ showId }: { showId: string }) {
     await refetch();
   };
   const seats = data?.seats ?? [];
-  const heldByMe = seats.filter((seat) => seat.status === "HELD" && seat.heldBy === user?.id);
+  const heldByMe = seats.filter((seat) => seat.status === "HELD" && seat.isHeldByMe);
   return (
     <Shell>
       <header className="page-header">
@@ -370,7 +370,7 @@ function SeatMapPage({ showId }: { showId: string }) {
       <div className="stage">SCREEN / STAGE</div>
       <section className="seat-map">
         {seats.map((seat) => {
-          const mine = seat.status === "HELD" && seat.heldBy === user?.id;
+          const mine = seat.status === "HELD" && seat.isHeldByMe;
           return (
             <button
               key={seat.id}

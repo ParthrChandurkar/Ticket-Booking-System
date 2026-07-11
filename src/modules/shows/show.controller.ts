@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import { Request, Response } from "express";
 import { prisma } from "../../config/prisma";
 import { getAuthUser } from "../../utils/getAuthUser";
+import { RequestWithUser } from "../../utils/getAuthUser";
 import { getRouteParam } from "../../utils/getRouteParam";
 import { HttpError } from "../../utils/httpError";
 
@@ -84,6 +85,7 @@ export const createShow = async (req: Request, res: Response) => {
 
 export const listShowSeats = async (req: Request, res: Response) => {
   const showId = getRouteParam(req, "showId");
+  const userId = (req as RequestWithUser).user?.id;
   const show = await prisma.show.findUnique({
     where: { id: showId }
   });
@@ -112,7 +114,7 @@ export const listShowSeats = async (req: Request, res: Response) => {
       showId: seat.showId,
       seatLayoutId: seat.seatLayoutId,
       status: seat.status,
-      heldBy: seat.heldBy,
+      isHeldByMe: Boolean(userId && seat.heldBy === userId),
       heldUntil: seat.heldUntil,
       rowLabel: seat.seatLayout.rowLabel,
       seatNumber: seat.seatLayout.seatNumber,
