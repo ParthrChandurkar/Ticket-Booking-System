@@ -74,6 +74,7 @@ type CheckoutState = {
   showId: string | null;
   heldSeatIds: string[];
   setHeldSeat: (showId: string, seatId: string) => void;
+  removeHeldSeat: (seatId: string) => void;
   clear: () => void;
 };
 
@@ -104,6 +105,11 @@ const useCheckout = create<CheckoutState>((set) => ({
         state.showId === showId
           ? Array.from(new Set([...state.heldSeatIds, seatId]))
           : [seatId]
+    })),
+  removeHeldSeat: (seatId) =>
+    set((state) => ({
+      ...state,
+      heldSeatIds: state.heldSeatIds.filter((id) => id !== seatId)
     })),
   clear: () => set({ showId: null, heldSeatIds: [] })
 }));
@@ -401,6 +407,7 @@ function SeatMapPage({ showId }: { showId: string }) {
   const user = useAuth((state) => state.user);
   const checkout = useCheckout();
   const [waitlistMessages, setWaitlistMessages] = React.useState<Record<string, string>>({});
+  const [seatActionError, setSeatActionError] = React.useState("");
   const { data, refetch } = useQuery({
     queryKey: ["seats", showId],
     queryFn: () => api<{ seats: Seat[] }>(`/shows/${showId}/seats`),
@@ -414,9 +421,24 @@ function SeatMapPage({ showId }: { showId: string }) {
   const hold = async (seat: Seat) => {
     if (!user) return go("/auth");
     if (user.role !== "CUSTOMER") return;
-    await api(`/shows/${showId}/seats/${seat.id}/hold`, { method: "POST" });
-    checkout.setHeldSeat(showId, seat.id);
-    await refetch();
+    try {
+      setSeatActionError("");
+      await api(`/shows/${showId}/seats/${seat.id}/hold`, { method: "POST" });
+      checkout.setHeldSeat(showId, seat.id);
+      await refetch();
+    } catch (error) {
+      setSeatActionError(error instanceof Error ? error.message : "Could not hold seat");
+    }
+  };
+  const releaseHold = async (seat: Seat) => {
+    try {
+      setSeatActionError("");
+      await api(`/shows/${showId}/seats/${seat.id}/hold`, { method: "DELETE" });
+      checkout.removeHeldSeat(seat.id);
+      await refetch();
+    } catch (error) {
+      setSeatActionError(error instanceof Error ? error.message : "Could not release hold");
+    }
   };
   const joinWaitlist = async (category: string) => {
     if (!user) return go("/auth");
@@ -452,6 +474,7 @@ function SeatMapPage({ showId }: { showId: string }) {
         <button className="primary-button compact" disabled={user?.role !== "CUSTOMER" || !heldByMe.length} onClick={() => go("/checkout")}>Checkout</button>
       </header>
       {user && user.role !== "CUSTOMER" && <p className="form-error">Only customer accounts can hold seats or checkout.</p>}
+      {seatActionError && <p className="form-error">{seatActionError}</p>}
       <div className="seat-legend">
         <span className="dot available" /> Available <span className="dot held" /> Held <span className="dot booked" /> Booked <span className="dot mine" /> Held by me
       </div>
@@ -519,6 +542,7 @@ function SeatMapPage({ showId }: { showId: string }) {
             <div className="held-row" key={seat.id}>
               <span>{seat.rowLabel}{seat.seatNumber} · {seat.category}</span>
               {seat.heldUntil && <Countdown until={seat.heldUntil} />}
+              <button className="ghost-button" onClick={() => releaseHold(seat)}>Release</button>
             </div>
           ))}
         </section>
@@ -530,26 +554,43 @@ function SeatMapPage({ showId }: { showId: string }) {
 function CheckoutPage() {
   const checkout = useCheckout();
   const user = useAuth((state) => state.user);
-  const { data } = useQuery({
+  const [confirmError, setConfirmError] = React.useState("");
+  const [isConfirming, setIsConfirming] = React.useState(false);
+  const { data, isLoading } = useQuery({
     queryKey: ["checkout-seats", checkout.showId],
     queryFn: () => api<{ seats: Seat[] }>(`/shows/${checkout.showId}/seats`),
     enabled: Boolean(checkout.showId)
   });
-  const seats = (data?.seats ?? []).filter((seat) => checkout.heldSeatIds.includes(seat.id));
+  const seats = (data?.seats ?? []).filter(
+    (seat) =>
+      checkout.heldSeatIds.includes(seat.id) &&
+      seat.status === "HELD" &&
+      seat.isHeldByMe
+  );
   const total = seats.reduce((sum, seat) => sum + seat.price, 0);
   const confirm = async () => {
-    const response = await api<{ booking: Booking }>("/bookings", {
-      method: "POST",
-      body: JSON.stringify({ showSeatIds: seats.map((seat) => seat.id) })
-    });
-    checkout.clear();
-    go("/bookings");
-    return response;
+    try {
+      setConfirmError("");
+      setIsConfirming(true);
+      const response = await api<{ booking: Booking }>("/bookings", {
+        method: "POST",
+        body: JSON.stringify({ showSeatIds: seats.map((seat) => seat.id) })
+      });
+      checkout.clear();
+      go("/bookings");
+      return response;
+    } catch (error) {
+      setConfirmError(error instanceof Error ? error.message : "Could not confirm booking");
+    } finally {
+      setIsConfirming(false);
+    }
   };
   return (
     <Shell>
       <section className="panel checkout">
         <h1>Checkout</h1>
+        {isLoading && <p>Loading held seats...</p>}
+        {!isLoading && checkout.heldSeatIds.length > 0 && seats.length === 0 && <p className="form-error">Your held seats are no longer available for checkout.</p>}
         {seats.map((seat) => (
           <div className="line-item" key={seat.id}>
             <span>{seat.rowLabel}{seat.seatNumber} · {seat.category}</span>
@@ -558,7 +599,10 @@ function CheckoutPage() {
         ))}
         <div className="total"><span>Total</span><strong>${total.toFixed(2)}</strong></div>
         {user?.role !== "CUSTOMER" && <p className="form-error">Only customer accounts can confirm bookings.</p>}
-        <button className="primary-button" disabled={user?.role !== "CUSTOMER" || !seats.length} onClick={confirm}>Confirm booking</button>
+        {confirmError && <p className="form-error">{confirmError}</p>}
+        <button className="primary-button" disabled={user?.role !== "CUSTOMER" || isLoading || isConfirming || !seats.length} onClick={confirm}>
+          {isConfirming ? "Confirming..." : isLoading ? "Loading seats..." : "Confirm booking"}
+        </button>
       </section>
     </Shell>
   );
@@ -569,6 +613,13 @@ function BookingsPage() {
     queryKey: ["bookings"],
     queryFn: () => api<{ bookings: Booking[] }>("/bookings")
   });
+  const cancelBooking = async (booking: Booking) => {
+    if (!window.confirm(`Cancel booking ${booking.bookingReference}?`)) {
+      return;
+    }
+    await api(`/bookings/${booking.id}`, { method: "DELETE" });
+    await refetch();
+  };
   return (
     <Shell>
       <h1>Booking history</h1>
@@ -581,6 +632,7 @@ function BookingsPage() {
             </div>
             <strong>${booking.totalPrice.toFixed(2)}</strong>
             <button onClick={async () => { await api(`/bookings/${booking.id}/resend-confirmation`); refetch(); }}>Resend confirmation</button>
+            {booking.status === "CONFIRMED" && <button onClick={() => cancelBooking(booking)}>Cancel</button>}
           </div>
         ))}
       </section>
