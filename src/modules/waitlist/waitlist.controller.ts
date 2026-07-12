@@ -57,6 +57,7 @@ export const joinWaitlist = async (req: Request, res: Response) => {
 };
 
 export const acceptWaitlistOffer = async (req: Request, res: Response) => {
+  const user = getAuthUser(req);
   const waitlistId = getRouteParam(req, "id");
 
   const waitlistEntry = await prisma.waitlist.findUnique({
@@ -64,6 +65,10 @@ export const acceptWaitlistOffer = async (req: Request, res: Response) => {
   });
   if (!waitlistEntry) {
     throw new HttpError(404, "Waitlist entry not found");
+  }
+
+  if (waitlistEntry.customerId !== user.id) {
+    throw new HttpError(403, "Forbidden");
   }
 
   if (

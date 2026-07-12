@@ -15,4 +15,9 @@ waitlistRouter.post(
   validateBody(joinWaitlistSchema),
   asyncHandler(joinWaitlist)
 );
-waitlistRouter.get("/:id/accept", asyncHandler(acceptWaitlistOffer));
+waitlistRouter.get(
+  "/:id/accept",
+  requireAuth,
+  requireRole(Role.CUSTOMER),
+  asyncHandler(acceptWaitlistOffer)
+);

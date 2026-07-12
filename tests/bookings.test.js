@@ -204,6 +204,27 @@ describe("bookings", () => {
     expect(emailPayload.html).toContain("data:image/png;base64,");
   });
 
+  test("admin and organiser users cannot create customer bookings", async () => {
+    const { showSeatId } = await createShowWithHeldSeats();
+    const admin = await registerAndLogin("ADMIN", "booking-forbidden-admin");
+    const organiser = await registerAndLogin("ORGANISER", "booking-forbidden-organiser");
+
+    const adminResponse = await request(app)
+      .post("/bookings")
+      .set("Authorization", `Bearer ${admin.token}`)
+      .send({ showSeatIds: [showSeatId] });
+    const organiserResponse = await request(app)
+      .post("/bookings")
+      .set("Authorization", `Bearer ${organiser.token}`)
+      .send({ showSeatIds: [showSeatId] });
+
+    expect(adminResponse.status).toBe(403);
+    expect(organiserResponse.status).toBe(403);
+
+    const bookingCount = await prisma.booking.count();
+    expect(bookingCount).toBe(0);
+  });
+
   test("calculates totalPrice from per-category show pricing", async () => {
     const { customer, showSeatIds } = await createShowWithHeldSeats({
       seats: [

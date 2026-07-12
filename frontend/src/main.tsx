@@ -289,7 +289,7 @@ function Shell({ children }: { children: React.ReactNode }) {
         <div className="logo"><LogoMark /></div>
         <nav>
           <button onClick={() => go("/events")}>Events</button>
-          <button onClick={() => go("/bookings")}>Bookings</button>
+          {user?.role === "CUSTOMER" && <button onClick={() => go("/bookings")}>Bookings</button>}
           {user?.role === "ORGANISER" && <button onClick={() => go("/organiser")}>Organiser</button>}
           {user?.role === "ADMIN" && <button onClick={() => go("/admin")}>Admin</button>}
         </nav>
@@ -389,6 +389,7 @@ function SeatMapPage({ showId }: { showId: string }) {
   });
   const hold = async (seat: Seat) => {
     if (!user) return go("/auth");
+    if (user.role !== "CUSTOMER") return;
     await api(`/shows/${showId}/seats/${seat.id}/hold`, { method: "POST" });
     checkout.setHeldSeat(showId, seat.id);
     await refetch();
@@ -402,8 +403,9 @@ function SeatMapPage({ showId }: { showId: string }) {
           <p className="eyebrow">Seat selection</p>
           <h1>Choose your seats</h1>
         </div>
-        <button className="primary-button compact" disabled={!heldByMe.length} onClick={() => go("/checkout")}>Checkout</button>
+        <button className="primary-button compact" disabled={user?.role !== "CUSTOMER" || !heldByMe.length} onClick={() => go("/checkout")}>Checkout</button>
       </header>
+      {user && user.role !== "CUSTOMER" && <p className="form-error">Only customer accounts can hold seats or checkout.</p>}
       <div className="seat-legend">
         <span className="dot available" /> Available <span className="dot held" /> Held <span className="dot booked" /> Booked <span className="dot mine" /> Held by me
       </div>
@@ -415,7 +417,7 @@ function SeatMapPage({ showId }: { showId: string }) {
             <button
               key={seat.id}
               className={`seat ${mine ? "mine" : seat.status.toLowerCase()}`}
-              disabled={seat.status !== "AVAILABLE"}
+              disabled={user?.role !== "CUSTOMER" || seat.status !== "AVAILABLE"}
               onClick={() => hold(seat)}
               title={`${seat.rowLabel}${seat.seatNumber} ${seat.category}`}
             >
@@ -441,6 +443,7 @@ function SeatMapPage({ showId }: { showId: string }) {
 
 function CheckoutPage() {
   const checkout = useCheckout();
+  const user = useAuth((state) => state.user);
   const { data } = useQuery({
     queryKey: ["checkout-seats", checkout.showId],
     queryFn: () => api<{ seats: Seat[] }>(`/shows/${checkout.showId}/seats`),
@@ -468,7 +471,8 @@ function CheckoutPage() {
           </div>
         ))}
         <div className="total"><span>Total</span><strong>${total.toFixed(2)}</strong></div>
-        <button className="primary-button" disabled={!seats.length} onClick={confirm}>Confirm booking</button>
+        {user?.role !== "CUSTOMER" && <p className="form-error">Only customer accounts can confirm bookings.</p>}
+        <button className="primary-button" disabled={user?.role !== "CUSTOMER" || !seats.length} onClick={confirm}>Confirm booking</button>
       </section>
     </Shell>
   );

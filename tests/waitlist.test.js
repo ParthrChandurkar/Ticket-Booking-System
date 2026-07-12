@@ -148,6 +148,55 @@ afterAll(async () => {
 });
 
 describe("waitlist", () => {
+  test("admin and organiser users cannot join or accept customer waitlist offers", async () => {
+    const { originalCustomer, bookingId, showId } = await createBookedSoldOutShow();
+    const firstWaitlisted = await createUserSession("CUSTOMER", "waitlist-role-customer");
+    const otherCustomer = await createUserSession("CUSTOMER", "waitlist-role-other");
+    const admin = await createUserSession("ADMIN", "waitlist-role-admin");
+    const organiser = await createUserSession("ORGANISER", "waitlist-role-organiser");
+
+    const adminJoin = await request(app)
+      .post("/waitlist")
+      .set("Authorization", `Bearer ${admin.token}`)
+      .send({ showId, category: "STANDARD" });
+    const organiserJoin = await request(app)
+      .post("/waitlist")
+      .set("Authorization", `Bearer ${organiser.token}`)
+      .send({ showId, category: "STANDARD" });
+
+    expect(adminJoin.status).toBe(403);
+    expect(organiserJoin.status).toBe(403);
+
+    const joinResponse = await request(app)
+      .post("/waitlist")
+      .set("Authorization", `Bearer ${firstWaitlisted.token}`)
+      .send({ showId, category: "STANDARD" });
+    expect(joinResponse.status).toBe(201);
+
+    const cancelResponse = await request(app)
+      .delete(`/bookings/${bookingId}`)
+      .set("Authorization", `Bearer ${originalCustomer.token}`)
+      .send();
+    expect(cancelResponse.status).toBe(200);
+
+    const adminAccept = await request(app)
+      .get(`/waitlist/${joinResponse.body.waitlist.id}/accept`)
+      .set("Authorization", `Bearer ${admin.token}`)
+      .send();
+    const organiserAccept = await request(app)
+      .get(`/waitlist/${joinResponse.body.waitlist.id}/accept`)
+      .set("Authorization", `Bearer ${organiser.token}`)
+      .send();
+    const otherCustomerAccept = await request(app)
+      .get(`/waitlist/${joinResponse.body.waitlist.id}/accept`)
+      .set("Authorization", `Bearer ${otherCustomer.token}`)
+      .send();
+
+    expect(adminAccept.status).toBe(403);
+    expect(organiserAccept.status).toBe(403);
+    expect(otherCustomerAccept.status).toBe(403);
+  });
+
   test("active waitlist-held seat is not released by immediate cron run", async () => {
     const { originalCustomer, bookingId, showId, showSeatId } = await createBookedSoldOutShow();
     const firstWaitlisted = await createUserSession("CUSTOMER", "waitlist-active");

@@ -142,4 +142,37 @@ describe("show seats", () => {
     expect(seat.heldBy).toMatch(/^fake-customer-/);
     expect(seat.heldUntil).toBeInstanceOf(Date);
   });
+
+  test("admin and organiser users cannot hold customer seats", async () => {
+    const { showId, seatId } = await setupShowWithSeat();
+
+    const adminToken = accessToken({
+      id: "admin-cannot-hold",
+      email: "admin-cannot-hold@example.com",
+      role: "ADMIN"
+    });
+    const organiserToken = accessToken({
+      id: "organiser-cannot-hold",
+      email: "organiser-cannot-hold@example.com",
+      role: "ORGANISER"
+    });
+
+    const adminResponse = await request(app)
+      .post(`/shows/${showId}/seats/${seatId}/hold`)
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send();
+    const organiserResponse = await request(app)
+      .post(`/shows/${showId}/seats/${seatId}/hold`)
+      .set("Authorization", `Bearer ${organiserToken}`)
+      .send();
+
+    expect(adminResponse.status).toBe(403);
+    expect(organiserResponse.status).toBe(403);
+
+    const seat = await prisma.showSeat.findUniqueOrThrow({
+      where: { id: seatId }
+    });
+    expect(seat.status).toBe("AVAILABLE");
+    expect(seat.heldBy).toBeNull();
+  });
 });
