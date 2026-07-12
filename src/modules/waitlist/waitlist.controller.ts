@@ -7,6 +7,46 @@ import { HttpError } from "../../utils/httpError";
 import { createConfirmedBookingFromHeldSeats } from "../bookings/booking.service";
 import { sendBookingConfirmationEmail } from "../bookings/bookingEmail.service";
 
+export const listWaitlistEntries = async (req: Request, res: Response) => {
+  const user = getAuthUser(req);
+  const waitlistEntries = await prisma.waitlist.findMany({
+    where: { customerId: user.id },
+    orderBy: [{ createdAt: "desc" }]
+  });
+
+  const shows = await prisma.show.findMany({
+    where: { id: { in: Array.from(new Set(waitlistEntries.map((entry) => entry.showId))) } }
+  });
+  const events = await prisma.event.findMany({
+    where: { id: { in: Array.from(new Set(shows.map((show) => show.eventId))) } }
+  });
+  const showById = new Map(shows.map((show) => [show.id, show]));
+  const eventById = new Map(events.map((event) => [event.id, event]));
+
+  res.json({
+    waitlist: waitlistEntries.map((entry) => {
+      const show = showById.get(entry.showId);
+      const event = show ? eventById.get(show.eventId) : undefined;
+      return {
+        ...entry,
+        show: show
+          ? {
+              id: show.id,
+              date: show.date,
+              time: show.time,
+              event: event
+                ? {
+                    id: event.id,
+                    title: event.title
+                  }
+                : null
+            }
+          : null
+      };
+    })
+  });
+};
+
 export const joinWaitlist = async (req: Request, res: Response) => {
   const user = getAuthUser(req);
   const { showId, category } = req.body;

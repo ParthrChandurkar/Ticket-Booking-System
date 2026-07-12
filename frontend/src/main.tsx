@@ -44,6 +44,23 @@ type Booking = {
   createdAt: string;
   seats: { showSeatId: string }[];
 };
+type WaitlistEntry = {
+  id: string;
+  customerId: string;
+  showId: string;
+  category: string;
+  status: "WAITING" | "OFFERED" | "EXPIRED" | "FULFILLED";
+  position: number;
+  offeredSeatId: string | null;
+  offerExpiresAt: string | null;
+  createdAt: string;
+  show?: {
+    id: string;
+    date: string;
+    time: string;
+    event: { id: string; title: string } | null;
+  } | null;
+};
 
 type AuthState = {
   user: User | null;
@@ -290,6 +307,7 @@ function Shell({ children }: { children: React.ReactNode }) {
         <nav>
           <button onClick={() => go("/events")}>Events</button>
           {user?.role === "CUSTOMER" && <button onClick={() => go("/bookings")}>Bookings</button>}
+          {user?.role === "CUSTOMER" && <button onClick={() => go("/waitlist")}>My Waitlist</button>}
           {user?.role === "ORGANISER" && <button onClick={() => go("/organiser")}>Organiser</button>}
           {user?.role === "ADMIN" && <button onClick={() => go("/admin")}>Admin</button>}
         </nav>
@@ -382,10 +400,16 @@ function Countdown({ until }: { until: string }) {
 function SeatMapPage({ showId }: { showId: string }) {
   const user = useAuth((state) => state.user);
   const checkout = useCheckout();
+  const [waitlistMessages, setWaitlistMessages] = React.useState<Record<string, string>>({});
   const { data, refetch } = useQuery({
     queryKey: ["seats", showId],
     queryFn: () => api<{ seats: Seat[] }>(`/shows/${showId}/seats`),
     refetchInterval: 4000
+  });
+  const { data: waitlistData, refetch: refetchWaitlist } = useQuery({
+    queryKey: ["waitlist"],
+    queryFn: () => api<{ waitlist: WaitlistEntry[] }>("/waitlist"),
+    enabled: user?.role === "CUSTOMER"
   });
   const hold = async (seat: Seat) => {
     if (!user) return go("/auth");
@@ -394,8 +418,30 @@ function SeatMapPage({ showId }: { showId: string }) {
     checkout.setHeldSeat(showId, seat.id);
     await refetch();
   };
+  const joinWaitlist = async (category: string) => {
+    if (!user) return go("/auth");
+    if (user.role !== "CUSTOMER") return;
+    try {
+      const response = await api<{ waitlist: WaitlistEntry }>("/waitlist", {
+        method: "POST",
+        body: JSON.stringify({ showId, category })
+      });
+      setWaitlistMessages((messages) => ({
+        ...messages,
+        [category]: `You're on the waitlist, position ${response.waitlist.position}.`
+      }));
+      await refetchWaitlist();
+    } catch (error) {
+      setWaitlistMessages((messages) => ({
+        ...messages,
+        [category]: error instanceof Error ? error.message : "Could not join waitlist"
+      }));
+    }
+  };
   const seats = data?.seats ?? [];
   const heldByMe = seats.filter((seat) => seat.status === "HELD" && seat.isHeldByMe);
+  const categories = Array.from(new Set(seats.map((seat) => seat.category)));
+  const waitlistForShow = (waitlistData?.waitlist ?? []).filter((entry) => entry.showId === showId);
   return (
     <Shell>
       <header className="page-header">
@@ -410,19 +456,59 @@ function SeatMapPage({ showId }: { showId: string }) {
         <span className="dot available" /> Available <span className="dot held" /> Held <span className="dot booked" /> Booked <span className="dot mine" /> Held by me
       </div>
       <div className="stage">SCREEN / STAGE</div>
-      <section className="seat-map">
-        {seats.map((seat) => {
-          const mine = seat.status === "HELD" && seat.isHeldByMe;
+      <section className="seat-categories">
+        {categories.map((category) => {
+          const categorySeats = seats.filter((seat) => seat.category === category);
+          const availableCount = categorySeats.filter((seat) => seat.status === "AVAILABLE").length;
+          const existingWaitlist = waitlistForShow.find(
+            (entry) =>
+              entry.category === category &&
+              ["WAITING", "OFFERED"].includes(entry.status)
+          );
+          const soldOut = availableCount === 0;
           return (
-            <button
-              key={seat.id}
-              className={`seat ${mine ? "mine" : seat.status.toLowerCase()}`}
-              disabled={user?.role !== "CUSTOMER" || seat.status !== "AVAILABLE"}
-              onClick={() => hold(seat)}
-              title={`${seat.rowLabel}${seat.seatNumber} ${seat.category}`}
-            >
-              {seat.rowLabel}{seat.seatNumber}
-            </button>
+            <div className="seat-category" key={category}>
+              <div className="category-header">
+                <div>
+                  <h2>{category}</h2>
+                  <span>{availableCount} available</span>
+                </div>
+                {categorySeats[0] && <strong>${categorySeats[0].price.toFixed(2)}</strong>}
+              </div>
+              {soldOut ? (
+                <div className="waitlist-card">
+                  <div>
+                    <h3>Sold out in {category}</h3>
+                    <p>{existingWaitlist ? `Status: ${existingWaitlist.status.toLowerCase()}, position ${existingWaitlist.position}` : "Join the queue and get the next released seat offer."}</p>
+                    {waitlistMessages[category] && <p className="form-success">{waitlistMessages[category]}</p>}
+                  </div>
+                  <button
+                    className="primary-button compact"
+                    disabled={user?.role !== "CUSTOMER" || Boolean(existingWaitlist)}
+                    onClick={() => joinWaitlist(category)}
+                  >
+                    {user ? existingWaitlist ? "On Waitlist" : "Join Waitlist" : "Sign in to Join"}
+                  </button>
+                </div>
+              ) : (
+                <div className="seat-map">
+                  {categorySeats.map((seat) => {
+                    const mine = seat.status === "HELD" && seat.isHeldByMe;
+                    return (
+                      <button
+                        key={seat.id}
+                        className={`seat ${mine ? "mine" : seat.status.toLowerCase()}`}
+                        disabled={user?.role !== "CUSTOMER" || seat.status !== "AVAILABLE"}
+                        onClick={() => hold(seat)}
+                        title={`${seat.rowLabel}${seat.seatNumber} ${seat.category}`}
+                      >
+                        {seat.rowLabel}{seat.seatNumber}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           );
         })}
       </section>
@@ -495,6 +581,55 @@ function BookingsPage() {
             </div>
             <strong>${booking.totalPrice.toFixed(2)}</strong>
             <button onClick={async () => { await api(`/bookings/${booking.id}/resend-confirmation`); refetch(); }}>Resend confirmation</button>
+          </div>
+        ))}
+      </section>
+    </Shell>
+  );
+}
+
+function WaitlistPage() {
+  const [message, setMessage] = React.useState("");
+  const { data, refetch } = useQuery({
+    queryKey: ["waitlist"],
+    queryFn: () => api<{ waitlist: WaitlistEntry[] }>("/waitlist")
+  });
+  const acceptOffer = async (entry: WaitlistEntry) => {
+    try {
+      setMessage("");
+      await api(`/waitlist/${entry.id}/accept`);
+      await refetch();
+      queryClient.invalidateQueries({ queryKey: ["bookings"] });
+      setMessage("Offer accepted and booking confirmed. Check your booking history.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not accept offer");
+    }
+  };
+  const entries = data?.waitlist ?? [];
+  return (
+    <Shell>
+      <header className="page-header">
+        <div>
+          <p className="eyebrow">Queue status</p>
+          <h1>My Waitlist</h1>
+        </div>
+      </header>
+      {message && <p className={message.includes("confirmed") ? "form-success" : "form-error"}>{message}</p>}
+      <section className="table-card">
+        {entries.length === 0 && <div className="empty-state">No waitlist entries yet.</div>}
+        {entries.map((entry) => (
+          <div className="booking-row" key={entry.id}>
+            <div>
+              <strong>{entry.show?.event?.title ?? "Show"}</strong>
+              <span>{entry.category} · {entry.status.toLowerCase()} · position {entry.position}</span>
+              {entry.show && <span>{new Date(entry.show.date).toLocaleDateString()} at {entry.show.time}</span>}
+              {entry.offerExpiresAt && <span>Offer expires {new Date(entry.offerExpiresAt).toLocaleString()}</span>}
+            </div>
+            {entry.status === "OFFERED" ? (
+              <button className="primary-button compact" onClick={() => acceptOffer(entry)}>Accept Offer</button>
+            ) : (
+              <span className={`status-pill ${entry.status.toLowerCase()}`}>{entry.status}</span>
+            )}
           </div>
         ))}
       </section>
@@ -683,6 +818,7 @@ function App() {
   if (route.startsWith("/shows/")) return <SeatMapPage showId={route.split("/")[2]} />;
   if (route === "/checkout") return <CheckoutPage />;
   if (route === "/bookings") return <BookingsPage />;
+  if (route === "/waitlist") return <WaitlistPage />;
   if (route === "/organiser") return <OrganiserPage />;
   if (route === "/admin") return <AdminPage />;
   return <EventsPage />;

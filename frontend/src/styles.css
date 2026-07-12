@@ -163,6 +163,11 @@ button {
   font-weight: 600;
 }
 
+.form-success {
+  color: var(--available);
+  font-weight: 700;
+}
+
 input,
 select,
 textarea {
@@ -456,12 +461,55 @@ textarea:focus {
   font-weight: 800;
 }
 
-.seat-map {
+.seat-categories {
   width: min(760px, 100%);
   margin: 0 auto;
   display: grid;
+  gap: 18px;
+}
+
+.seat-category {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  padding: 16px;
+  box-shadow: 0 10px 30px rgba(16, 24, 40, .05);
+}
+
+.category-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.category-header h2,
+.waitlist-card h3 {
+  margin: 0 0 4px;
+}
+
+.category-header span,
+.waitlist-card p,
+.empty-state {
+  color: var(--muted);
+}
+
+.seat-map {
+  display: grid;
   grid-template-columns: repeat(auto-fit, minmax(48px, 1fr));
   gap: 10px;
+}
+
+.waitlist-card {
+  border: 1px dashed var(--held);
+  border-radius: 8px;
+  background: #fff9ed;
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
 }
 
 .seat {
@@ -523,6 +571,39 @@ textarea:focus {
 .booking-row > div {
   display: grid;
   gap: 4px;
+}
+
+.empty-state {
+  padding: 18px;
+}
+
+.status-pill {
+  border-radius: 999px;
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 900;
+  background: #eef2f8;
+  color: var(--muted);
+}
+
+.status-pill.waiting {
+  background: #fff2d6;
+  color: #94630a;
+}
+
+.status-pill.offered {
+  background: #e8f0ff;
+  color: var(--primary);
+}
+
+.status-pill.expired {
+  background: #fde8e8;
+  color: var(--booked);
+}
+
+.status-pill.fulfilled {
+  background: #e8f7ef;
+  color: var(--available);
 }
 
 .summary {

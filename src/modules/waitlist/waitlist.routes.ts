@@ -3,11 +3,17 @@ import { Role } from "@prisma/client";
 import { requireAuth, requireRole } from "../../middleware/auth";
 import { validateBody } from "../../middleware/validate";
 import { asyncHandler } from "../../utils/asyncHandler";
-import { acceptWaitlistOffer, joinWaitlist } from "./waitlist.controller";
+import { acceptWaitlistOffer, joinWaitlist, listWaitlistEntries } from "./waitlist.controller";
 import { joinWaitlistSchema } from "./waitlist.schemas";
 
 export const waitlistRouter = express.Router();
 
+waitlistRouter.get(
+  "/",
+  requireAuth,
+  requireRole(Role.CUSTOMER),
+  asyncHandler(listWaitlistEntries)
+);
 waitlistRouter.post(
   "/",
   requireAuth,

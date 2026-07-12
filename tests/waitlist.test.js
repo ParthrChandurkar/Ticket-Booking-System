@@ -197,6 +197,33 @@ describe("waitlist", () => {
     expect(otherCustomerAccept.status).toBe(403);
   });
 
+  test("customer can list their waitlist entries with show context", async () => {
+    const { showId } = await createBookedSoldOutShow();
+    const firstWaitlisted = await createUserSession("CUSTOMER", "waitlist-list");
+
+    const joinResponse = await request(app)
+      .post("/waitlist")
+      .set("Authorization", `Bearer ${firstWaitlisted.token}`)
+      .send({ showId, category: "STANDARD" });
+    expect(joinResponse.status).toBe(201);
+
+    const listResponse = await request(app)
+      .get("/waitlist")
+      .set("Authorization", `Bearer ${firstWaitlisted.token}`)
+      .send();
+
+    expect(listResponse.status).toBe(200);
+    expect(listResponse.body.waitlist).toHaveLength(1);
+    expect(listResponse.body.waitlist[0]).toMatchObject({
+      id: joinResponse.body.waitlist.id,
+      showId,
+      category: "STANDARD",
+      status: "WAITING",
+      position: 1
+    });
+    expect(listResponse.body.waitlist[0].show.event.title).toBe("Sold Out Event");
+  });
+
   test("active waitlist-held seat is not released by immediate cron run", async () => {
     const { originalCustomer, bookingId, showId, showSeatId } = await createBookedSoldOutShow();
     const firstWaitlisted = await createUserSession("CUSTOMER", "waitlist-active");
