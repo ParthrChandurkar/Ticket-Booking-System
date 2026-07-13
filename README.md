@@ -68,6 +68,33 @@ The frontend can be pointed at a backend URL with `VITE_API_URL`. If it is not s
 VITE_API_URL=http://localhost:4000
 ```
 
+## Main User Flows
+
+### Admin
+
+- Seed or sign in with the default admin account.
+- Create venues.
+- Generate seat layouts for each venue.
+
+### Organiser
+
+- Register through the organiser signup endpoint using `ORGANISER_SIGNUP_CODE`.
+- Create events and shows.
+- Set per-category prices for each show.
+- View revenue summaries.
+
+### Customer
+
+- Register through the public signup form.
+- Browse events and select a show.
+- Hold available seats from the seat map.
+- Confirm checkout to create a booking and QR ticket.
+- View booking history, resend confirmation, and cancel confirmed bookings.
+
+### Waitlist
+
+When a category is sold out, customers can join the waitlist from the seat map. If a booked seat is cancelled, the next waiting customer receives a time-limited offer and can accept it from the `My Waitlist` page.
+
 ## Default Admin Access
 
 The default admin account is seeded directly into the database, not created through public signup.
