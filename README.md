@@ -95,6 +95,25 @@ VITE_API_URL=http://localhost:4000
 
 When a category is sold out, customers can join the waitlist from the seat map. If a booked seat is cancelled, the next waiting customer receives a time-limited offer and can accept it from the `My Waitlist` page.
 
+## Testing
+
+Run the backend test suite from the repository root:
+
+```bash
+npm test
+```
+
+Tests use `TEST_DATABASE_URL`, not the main database URL. Keep the test database separate so automated cleanup never touches production or demo data.
+
+## Deployment Notes
+
+- Frontend target: Vercel
+- Backend target: Render
+- Database target: Neon PostgreSQL
+- The backend requires all environment variables listed above in the hosting dashboard.
+- The frontend requires `VITE_API_URL` to point at the deployed backend URL.
+- If Neon DNS prefers IPv6 on a local machine, use a network that supports IPv6 or configure the connection to use a reachable IPv4 route before testing.
+
 ## Default Admin Access
 
 The default admin account is seeded directly into the database, not created through public signup.
