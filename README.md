@@ -47,6 +47,27 @@ npm run dev
 
 By default, the backend listens on `http://localhost:4000` and the frontend runs on `http://127.0.0.1:5173`.
 
+## Environment Variables
+
+Create a `.env` file in the repository root for backend configuration:
+
+```env
+DATABASE_URL=
+TEST_DATABASE_URL=
+JWT_SECRET=
+RESEND_API_KEY=
+RESEND_FROM_EMAIL=
+DEFAULT_ADMIN_EMAIL=admin@seatflow.dev
+DEFAULT_ADMIN_PASSWORD=
+ORGANISER_SIGNUP_CODE=
+```
+
+The frontend can be pointed at a backend URL with `VITE_API_URL`. If it is not set, the app uses `http://localhost:4000`.
+
+```env
+VITE_API_URL=http://localhost:4000
+```
+
 ## Default Admin Access
 
 The default admin account is seeded directly into the database, not created through public signup.
