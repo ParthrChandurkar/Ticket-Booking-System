@@ -112,7 +112,22 @@ Tests use `TEST_DATABASE_URL`, not the main database URL. Keep the test database
 - Database target: Neon PostgreSQL
 - The backend requires all environment variables listed above in the hosting dashboard.
 - The frontend requires `VITE_API_URL` to point at the deployed backend URL.
-- If Neon DNS prefers IPv6 on a local machine, use a network that supports IPv6 or configure the connection to use a reachable IPv4 route before testing.
+
+## Known Issues
+
+### Neon IPv6 / Prisma Connection Timeout
+
+During local browser testing, Prisma intermittently failed with `Can't reach database server` even though the Neon database was available. The local DNS lookup for the Neon hostname returned both IPv6 and IPv4 addresses, but this machine/network could not reach Neon's IPv6 address on port `5432`. Prisma's query engine attempted that unreachable IPv6 route and timed out before trying a working IPv4 route.
+
+This was not fixed in Prisma schema or application code. The local workaround was to run the backend with a `DATABASE_URL` that pinned the host to a reachable Neon IPv4 address and added Neon's endpoint routing option:
+
+```env
+DATABASE_URL=postgresql://USER:PASSWORD@<reachable-neon-ipv4>/DB?sslmode=require&channel_binding=require&options=endpoint%3D<neon-endpoint-id>
+```
+
+The `options=endpoint%3D...` value is required when connecting by IP address because Neon normally uses the hostname/SNI to route the connection to the correct compute endpoint.
+
+For Render deployment, first try the normal Neon hostname connection string from the Neon dashboard. Render services use documented outbound IP ranges, and the issue may not occur there. If Render logs show the same Prisma `Can't reach database server` error and the Neon hostname resolves to an unreachable IPv6 route, use the IPv4-plus-endpoint form above as the backend `DATABASE_URL`, or use a deployment/network configuration with working outbound IPv6.
 
 ## Default Admin Access
 
