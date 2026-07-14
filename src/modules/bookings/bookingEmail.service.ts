@@ -29,6 +29,7 @@ type BookingEmailData = {
   }[];
 };
 
+const qrCodeContentId = "booking-qr-code";
 const getResend = () => new Resend(getEnv("RESEND_API_KEY"));
 
 const escapeHtml = (value: string) =>
@@ -45,8 +46,12 @@ export const generateBookingQrCode = async (bookingReference: string) =>
     width: 240
   });
 
-const buildBookingEmailHtml = async (data: BookingEmailData) => {
-  const qrCode = await generateBookingQrCode(data.booking.bookingReference);
+const getQrCodeAttachmentContent = async (bookingReference: string) => {
+  const qrCode = await generateBookingQrCode(bookingReference);
+  return qrCode.replace(/^data:image\/png;base64,/, "");
+};
+
+const buildBookingEmailHtml = (data: BookingEmailData) => {
   const seatList = data.seats
     .map(
       (seat) =>
@@ -67,7 +72,7 @@ const buildBookingEmailHtml = async (data: BookingEmailData) => {
       <p><strong>Booking reference:</strong> ${escapeHtml(data.booking.bookingReference)}</p>
       <h2>Seats</h2>
       <ul>${seatList}</ul>
-      <img src="${qrCode}" alt="Booking QR code" width="240" height="240" />
+      <img src="cid:${qrCodeContentId}" alt="Booking QR code" width="240" height="240" />
     </div>
   `;
 };
@@ -122,7 +127,8 @@ const loadBookingEmailData = async (bookingId: string) => {
 
 export const sendBookingConfirmationEmail = async (bookingId: string) => {
   const data = await loadBookingEmailData(bookingId);
-  const html = await buildBookingEmailHtml(data);
+  const html = buildBookingEmailHtml(data);
+  const qrCodeContent = await getQrCodeAttachmentContent(data.booking.bookingReference);
   const resend = getResend();
   const delays = [1000, 2000, 4000];
   let lastError: unknown;
@@ -133,7 +139,15 @@ export const sendBookingConfirmationEmail = async (bookingId: string) => {
         from: getEnv("RESEND_FROM_EMAIL"),
         to: [data.customer.email],
         subject: `Booking confirmed: ${data.event.title}`,
-        html
+        html,
+        attachments: [
+          {
+            filename: "booking-qr-code.png",
+            content: qrCodeContent,
+            contentType: "image/png",
+            contentId: qrCodeContentId
+          }
+        ]
       });
 
       if (response.error) {

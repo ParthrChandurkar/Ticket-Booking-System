@@ -201,7 +201,17 @@ describe("bookings", () => {
     expect(mockSend).toHaveBeenCalledTimes(1);
     const emailPayload = mockSend.mock.calls[0][0];
     expect(emailPayload.html).toContain(response.body.booking.bookingReference);
-    expect(emailPayload.html).toContain("data:image/png;base64,");
+    expect(emailPayload.html).toContain('src="cid:booking-qr-code"');
+    expect(emailPayload.html).not.toContain("data:image/png;base64,");
+    expect(emailPayload.attachments).toHaveLength(1);
+    expect(emailPayload.attachments[0]).toMatchObject({
+      filename: "booking-qr-code.png",
+      contentType: "image/png",
+      contentId: "booking-qr-code"
+    });
+
+    const qrBuffer = Buffer.from(emailPayload.attachments[0].content, "base64");
+    expect(qrBuffer.subarray(0, 8).toString("hex")).toBe("89504e470d0a1a0a");
   });
 
   test("admin and organiser users cannot create customer bookings", async () => {
