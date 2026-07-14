@@ -115,6 +115,10 @@ Tests use `TEST_DATABASE_URL`, not the main database URL. Keep the test database
 
 ## Known Issues
 
+### Resend Sandbox Email Delivery
+
+This project intentionally uses Resend's sandbox sender, `onboarding@resend.dev`, because no custom sending domain is available for the assignment demo. Resend limits this sender to testing only: emails can be delivered only to the email address associated with the Resend account. Production use would require verifying a custom sending domain in Resend and updating `RESEND_FROM_EMAIL` to use that verified domain. This is a deliberate assignment constraint, not an unresolved application bug.
+
 ### Neon IPv6 / Prisma Connection Timeout
 
 During local browser testing, Prisma intermittently failed with `Can't reach database server` even though the Neon database was available. The local DNS lookup for the Neon hostname returned both IPv6 and IPv4 addresses, but this machine/network could not reach Neon's IPv6 address on port `5432`. Prisma's query engine attempted that unreachable IPv6 route and timed out before trying a working IPv4 route.
@@ -146,4 +150,4 @@ Public registration always creates `CUSTOMER` users. Organiser registration uses
 
 ## Milestone 6 Checklist
 
-- Configure a production-ready Resend sender before final demo. The current development sender, `onboarding@resend.dev`, is sandbox-limited and may only deliver to the Resend account email. Either verify a real sending domain or clearly document Resend testing mode as a known deployment limitation.
+- Email delivery is documented as sandbox-limited for this assignment. A production-ready Resend sender would require a verified custom domain.
