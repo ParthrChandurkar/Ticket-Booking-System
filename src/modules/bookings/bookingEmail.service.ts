@@ -10,6 +10,7 @@ type BookingEmailData = {
     id: string;
     bookingReference: string;
     showId: string;
+    totalPrice: number;
   };
   customer: {
     email: string;
@@ -31,6 +32,7 @@ type BookingEmailData = {
 
 const qrCodeContentId = "booking-qr-code";
 const getResend = () => new Resend(getEnv("RESEND_API_KEY"));
+const formatCurrency = (amount: number) => `₹${amount.toFixed(2)}`;
 
 const escapeHtml = (value: string) =>
   value
@@ -70,6 +72,7 @@ const buildBookingEmailHtml = (data: BookingEmailData) => {
         data.show.time
       )}</p>
       <p><strong>Booking reference:</strong> ${escapeHtml(data.booking.bookingReference)}</p>
+      <p><strong>Total paid:</strong> ${formatCurrency(data.booking.totalPrice)}</p>
       <h2>Seats</h2>
       <ul>${seatList}</ul>
       <img src="cid:${qrCodeContentId}" alt="Booking QR code" width="240" height="240" />

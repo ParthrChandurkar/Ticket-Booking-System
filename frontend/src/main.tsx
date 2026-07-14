@@ -8,6 +8,8 @@ import "./styles.css";
 const queryClient = new QueryClient();
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:4000";
 
+const formatCurrency = (amount: number) => `₹${amount.toFixed(2)}`;
+
 type Role = "CUSTOMER" | "ORGANISER" | "ADMIN";
 type User = { id: string; name: string; email: string; role: Role };
 type EventItem = {
@@ -382,7 +384,7 @@ function EventDetailPage({ id }: { id: string }) {
             <button key={show.id} onClick={() => go(`/shows/${show.id}/seats`)}>
               <strong>{new Date(show.date).toLocaleDateString()}</strong>
               <span>{show.time}</span>
-              <em>{show.pricing.map((price) => `${price.category} $${price.price}`).join(" · ")}</em>
+              <em>{show.pricing.map((price) => `${price.category} ${formatCurrency(price.price)}`).join(" · ")}</em>
             </button>
           ))}
         </div>
@@ -496,7 +498,7 @@ function SeatMapPage({ showId }: { showId: string }) {
                   <h2>{category}</h2>
                   <span>{availableCount} available</span>
                 </div>
-                {categorySeats[0] && <strong>${categorySeats[0].price.toFixed(2)}</strong>}
+                {categorySeats[0] && <strong>{formatCurrency(categorySeats[0].price)}</strong>}
               </div>
               {soldOut ? (
                 <div className="waitlist-card">
@@ -594,10 +596,10 @@ function CheckoutPage() {
         {seats.map((seat) => (
           <div className="line-item" key={seat.id}>
             <span>{seat.rowLabel}{seat.seatNumber} · {seat.category}</span>
-            <strong>${seat.price.toFixed(2)}</strong>
+            <strong>{formatCurrency(seat.price)}</strong>
           </div>
         ))}
-        <div className="total"><span>Total</span><strong>${total.toFixed(2)}</strong></div>
+        <div className="total"><span>Total</span><strong>{formatCurrency(total)}</strong></div>
         {user?.role !== "CUSTOMER" && <p className="form-error">Only customer accounts can confirm bookings.</p>}
         {confirmError && <p className="form-error">{confirmError}</p>}
         <button className="primary-button" disabled={user?.role !== "CUSTOMER" || isLoading || isConfirming || !seats.length} onClick={confirm}>
@@ -630,7 +632,7 @@ function BookingsPage() {
               <strong>{booking.bookingReference}</strong>
               <span>{booking.status} · {new Date(booking.createdAt).toLocaleString()}</span>
             </div>
-            <strong>${booking.totalPrice.toFixed(2)}</strong>
+            <strong>{formatCurrency(booking.totalPrice)}</strong>
             <button onClick={async () => { await api(`/bookings/${booking.id}/resend-confirmation`); refetch(); }}>Resend confirmation</button>
             {booking.status === "CONFIRMED" && <button onClick={() => cancelBooking(booking)}>Cancel</button>}
           </div>
@@ -703,7 +705,7 @@ const showFormSchema = z.object({
 
 function OrganiserPage() {
   const [eventForm, setEventForm] = React.useState({ venueId: "", title: "", description: "" });
-  const [showForm, setShowForm] = React.useState({ eventId: "", date: "", time: "", categoryPrices: "STANDARD:30" });
+  const [showForm, setShowForm] = React.useState({ eventId: "", date: "", time: "", categoryPrices: "STANDARD:350,PREMIUM:750" });
   const [eventError, setEventError] = React.useState("");
   const [showError, setShowError] = React.useState("");
   const { data: events, refetch } = useQuery({ queryKey: ["my-events"], queryFn: () => api<{ events: EventItem[] }>("/events") });
@@ -779,7 +781,7 @@ function OrganiserPage() {
           <option value="">Select event</option>
           {events?.events.map((event) => <option key={event.id} value={event.id}>{event.title}</option>)}
         </select>
-        {summary && <div className="summary"><strong>${summary.totalRevenue.toFixed(2)}</strong><span>{summary.totalBookings} bookings</span></div>}
+        {summary && <div className="summary"><strong>{formatCurrency(summary.totalRevenue)}</strong><span>{summary.totalBookings} bookings</span></div>}
       </section>
     </Shell>
   );
