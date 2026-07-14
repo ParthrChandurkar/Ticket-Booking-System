@@ -62,7 +62,7 @@ export const resendConfirmation = async (req: Request, res: Response) => {
     throw new HttpError(502, "Confirmation email could not be resent");
   }
 
-  res.json({ message: "Confirmation email resent" });
+  res.json({ message: "Confirmation email resent", emailFailed: false });
 };
 
 export const cancelBooking = async (req: Request, res: Response) => {
