@@ -82,6 +82,7 @@ type AuthState = {
   accessToken: string | null;
   refreshToken: string | null;
   setSession: (session: { user: User; accessToken: string; refreshToken: string }) => void;
+  updateTokens: (tokens: { accessToken: string; refreshToken: string }) => void;
   logout: () => void;
 };
 
@@ -103,6 +104,15 @@ const useAuth = create<AuthState>((set) => ({
     localStorage.setItem("seatflow-session", JSON.stringify(session));
     set(session);
   },
+  updateTokens: (tokens) =>
+    set((state) => {
+      if (!state.user) {
+        return state;
+      }
+      const session = { user: state.user, ...tokens };
+      localStorage.setItem("seatflow-session", JSON.stringify(session));
+      return session;
+    }),
   logout: () => {
     localStorage.removeItem("seatflow-session");
     set({ user: null, accessToken: null, refreshToken: null });
@@ -129,7 +139,36 @@ const useCheckout = create<CheckoutState>((set) => ({
   clear: () => set({ showId: null, heldSeatIds: [] })
 }));
 
-const api = async <T,>(path: string, options: RequestInit = {}) => {
+const parseResponse = async (response: Response) => {
+  const text = await response.text();
+  return text ? JSON.parse(text) : null;
+};
+
+const refreshAccessToken = async () => {
+  const refreshToken = useAuth.getState().refreshToken;
+  if (!refreshToken) {
+    return false;
+  }
+
+  const response = await fetch(`${API_URL}/auth/refresh`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ refreshToken })
+  });
+  const data = await parseResponse(response);
+  if (!response.ok) {
+    useAuth.getState().logout();
+    return false;
+  }
+
+  useAuth.getState().updateTokens({
+    accessToken: data.accessToken,
+    refreshToken: data.refreshToken
+  });
+  return true;
+};
+
+const api = async <T,>(path: string, options: RequestInit = {}, retryOnUnauthorized = true): Promise<T> => {
   const token = useAuth.getState().accessToken;
   const response = await fetch(`${API_URL}${path}`, {
     ...options,
@@ -139,8 +178,13 @@ const api = async <T,>(path: string, options: RequestInit = {}) => {
       ...(options.headers ?? {})
     }
   });
-  const text = await response.text();
-  const data = text ? JSON.parse(text) : null;
+  const data = await parseResponse(response);
+  if (response.status === 401 && retryOnUnauthorized && !path.startsWith("/auth/")) {
+    const refreshed = await refreshAccessToken();
+    if (refreshed) {
+      return api<T>(path, options, false);
+    }
+  }
   if (!response.ok) {
     throw new Error(data?.message ?? "Request failed");
   }
