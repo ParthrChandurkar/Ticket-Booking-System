@@ -1,0 +1,29 @@
+services:
+  - type: web
+    name: seatflow-api
+    runtime: node
+    repo: https://github.com/ParthrChandurkar/Ticket-Booking-System
+    branch: main
+    plan: free
+    buildCommand: npm install && npm run build && npx prisma migrate deploy && npm run prisma:seed
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: RESEND_FROM_EMAIL
+        sync: false
+      - key: DEFAULT_ADMIN_EMAIL
+        sync: false
+      - key: DEFAULT_ADMIN_PASSWORD
+        sync: false
+      - key: ORGANISER_SIGNUP_CODE
+        sync: false
+      - key: CORS_ORIGIN
+        sync: false
