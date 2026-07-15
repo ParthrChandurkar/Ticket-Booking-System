@@ -5,7 +5,7 @@ services:
     repo: https://github.com/ParthrChandurkar/Ticket-Booking-System
     branch: main
     plan: free
-    buildCommand: npm install && npm run build && npx prisma migrate deploy && npm run prisma:seed
+    buildCommand: npm install --include=dev && npm run build && npx prisma migrate deploy && npm run prisma:seed
     startCommand: npm start
     healthCheckPath: /health
     envVars:
