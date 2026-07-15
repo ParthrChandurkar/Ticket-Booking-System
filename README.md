@@ -137,6 +137,12 @@ Customers can join a waitlist only when a show/category has no available seats. 
 
 If the offer expires, the cron job marks it `EXPIRED`, releases the seat, and cascades the offer to the next waiting customer. Additional design notes are in [docs/design.md](docs/design.md).
 
+## 📩 Email + QR Verification
+
+Booking confirmation email delivery has been verified in Gmail using the Resend sandbox sender. A live demo booking for **Parallel Lines: Indie Night** was delivered to `parthrchn27@gmail.com` with the subject `Booking confirmed: Parallel Lines: Indie Night`.
+
+The email rendered the booking details, show time, total amount, selected seat, booking reference, and an inline QR ticket successfully. The verified sample used booking reference `c075587a-396b-4ff8-a59b-38fa5c2c9b97` for **Row A, Seat 1 (PREMIUM)** with total paid `₹900.00`.
+
 ## ⚠️ Known Limitations
 
 - Email is sent through Resend's sandbox sender, `onboarding@resend.dev`. For the assignment demo, all booking and waitlist emails are routed to `DEMO_EMAIL_RECIPIENT` (`parthrchn27@gmail.com`) because Resend sandbox delivery only works for the verified account email. Production use would require verifying a custom sending domain with Resend and sending to each customer email.
