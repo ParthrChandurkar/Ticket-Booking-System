@@ -1,7 +1,7 @@
 import QRCode from "qrcode";
 import { Resend } from "resend";
 import { prisma } from "../../config/prisma";
-import { getEnv } from "../../config/env";
+import { getEnv, loadEnv } from "../../config/env";
 import { HttpError } from "../../utils/httpError";
 import { sleep } from "../../utils/sleep";
 
@@ -32,6 +32,10 @@ type BookingEmailData = {
 
 const qrCodeContentId = "booking-qr-code";
 const getResend = () => new Resend(getEnv("RESEND_API_KEY"));
+const getDemoEmailRecipient = () => {
+  loadEnv();
+  return process.env.DEMO_EMAIL_RECIPIENT ?? "parthrchn27@gmail.com";
+};
 const formatCurrency = (amount: number) => `₹${amount.toFixed(2)}`;
 
 const escapeHtml = (value: string) =>
@@ -140,7 +144,7 @@ export const sendBookingConfirmationEmail = async (bookingId: string) => {
     try {
       const response = await resend.emails.send({
         from: getEnv("RESEND_FROM_EMAIL"),
-        to: [data.customer.email],
+        to: [getDemoEmailRecipient()],
         subject: `Booking confirmed: ${data.event.title}`,
         html,
         attachments: [

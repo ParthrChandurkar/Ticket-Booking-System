@@ -53,6 +53,20 @@ const demoVenues = [
       if (["C", "D", "E"].includes(row)) return "GOLD";
       return "SILVER";
     }
+  },
+  {
+    name: "Prithvi Theatre, Mumbai",
+    address: "Juhu Church Road, Mumbai",
+    rows: ["A", "B"],
+    seatsPerRow: 4,
+    categoryForRow: (row) => (row === "A" ? "PREMIUM" : "STANDARD")
+  },
+  {
+    name: "Ranga Shankara, Bengaluru",
+    address: "JP Nagar, Bengaluru",
+    rows: ["A", "B", "C"],
+    seatsPerRow: 5,
+    categoryForRow: (row) => (row === "A" ? "PREMIUM" : "STANDARD")
   }
 ];
 
@@ -125,6 +139,66 @@ const demoEvents = [
         ]
       }
     ]
+  },
+  {
+    venueName: "Prithvi Theatre, Mumbai",
+    title: "Parallel Lines: Indie Night",
+    description: "An intimate indie music showcase with acoustic sets, original tracks, and limited theatre seating.",
+    shows: [
+      {
+        date: futureDate(9),
+        time: "19:30",
+        pricing: [
+          { category: "STANDARD", price: 450 },
+          { category: "PREMIUM", price: 900 }
+        ]
+      }
+    ]
+  },
+  {
+    venueName: "Prithvi Theatre, Mumbai",
+    title: "Stand-Up Saturday: Mumbai Laughs",
+    description: "A compact comedy night built for quick sell-outs and waitlist demonstrations.",
+    shows: [
+      {
+        date: futureDate(10),
+        time: "20:00",
+        pricing: [
+          { category: "STANDARD", price: 350 },
+          { category: "PREMIUM", price: 700 }
+        ]
+      }
+    ]
+  },
+  {
+    venueName: "Ranga Shankara, Bengaluru",
+    title: "Classical Strings: Evening Ragas",
+    description: "A refined live performance featuring sitar, violin, and tabla in an intimate auditorium setting.",
+    shows: [
+      {
+        date: futureDate(11),
+        time: "18:45",
+        pricing: [
+          { category: "STANDARD", price: 400 },
+          { category: "PREMIUM", price: 850 }
+        ]
+      }
+    ]
+  },
+  {
+    venueName: "Ranga Shankara, Bengaluru",
+    title: "Neon Pulse Festival: Bengaluru",
+    description: "A high-energy electronic music showcase with limited premium seating and fast-moving holds.",
+    shows: [
+      {
+        date: futureDate(13),
+        time: "21:00",
+        pricing: [
+          { category: "STANDARD", price: 650 },
+          { category: "PREMIUM", price: 1200 }
+        ]
+      }
+    ]
   }
 ];
 
@@ -171,14 +245,27 @@ const seedDemoCatalog = async (adminId, organiserId) => {
   const venueByName = new Map();
 
   for (const venue of demoVenues) {
-    const createdVenue = await prisma.venue.create({
-      data: {
-        name: venue.name,
-        address: venue.address,
-        createdBy: adminId
-      }
+    let createdVenue = await prisma.venue.findFirst({
+      where: { name: venue.name }
     });
-    await createSeatLayouts(createdVenue.id, venue);
+
+    if (!createdVenue) {
+      createdVenue = await prisma.venue.create({
+        data: {
+          name: venue.name,
+          address: venue.address,
+          createdBy: adminId
+        }
+      });
+    }
+
+    const existingLayouts = await prisma.seatLayout.count({
+      where: { venueId: createdVenue.id }
+    });
+    if (existingLayouts === 0) {
+      await createSeatLayouts(createdVenue.id, venue);
+    }
+
     venueByName.set(venue.name, createdVenue);
   }
 
@@ -186,6 +273,16 @@ const seedDemoCatalog = async (adminId, organiserId) => {
     const venue = venueByName.get(event.venueName);
     if (!venue) {
       throw new Error(`Missing demo venue: ${event.venueName}`);
+    }
+
+    const existingEvent = await prisma.event.findFirst({
+      where: {
+        organiserId,
+        title: event.title
+      }
+    });
+    if (existingEvent) {
+      continue;
     }
 
     const createdEvent = await prisma.event.create({
@@ -263,12 +360,7 @@ const main = async () => {
     await resetDemoCatalog();
   }
 
-  const existingDemoEvents = await prisma.event.count({
-    where: { organiserId: organiser.id }
-  });
-  if (existingDemoEvents === 0) {
-    await seedDemoCatalog(admin.id, organiser.id);
-  }
+  await seedDemoCatalog(admin.id, organiser.id);
 
   console.log(`Default admin account ready: ${email}`);
   console.log(`Demo organiser account ready: ${demoOrganiserEmail}`);

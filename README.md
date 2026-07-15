@@ -139,7 +139,7 @@ If the offer expires, the cron job marks it `EXPIRED`, releases the seat, and ca
 
 ## ⚠️ Known Limitations
 
-- Email is sent through Resend's sandbox sender, `onboarding@resend.dev`. During testing, Resend only delivers these emails to the verified account email. Production use would require verifying a custom sending domain with Resend.
+- Email is sent through Resend's sandbox sender, `onboarding@resend.dev`. For the assignment demo, all booking and waitlist emails are routed to `DEMO_EMAIL_RECIPIENT` (`parthrchn27@gmail.com`) because Resend sandbox delivery only works for the verified account email. Production use would require verifying a custom sending domain with Resend and sending to each customer email.
 - There is no real payment gateway integration. Checkout confirms seats already held by the customer and creates a booking record.
 - Render free-tier services may cold start after inactivity, so the first backend request can be slower.
 - The app uses polling for seat-map updates, as required, rather than WebSockets or SSE.
@@ -162,4 +162,4 @@ Tests require `TEST_DATABASE_URL` and refuse to run when `TEST_DATABASE_URL` mat
 - Backend: Render
 - Database: Neon PostgreSQL
 
-Production deployment uses `prisma migrate deploy` followed by the seed script. The backend must be configured with `DATABASE_URL`, `JWT_SECRET`, `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `DEFAULT_ADMIN_EMAIL`, `DEFAULT_ADMIN_PASSWORD`, `ORGANISER_SIGNUP_CODE`, and `CORS_ORIGIN`. The frontend must be configured with `VITE_API_URL` pointing to the deployed Render backend.
+Production deployment uses `prisma migrate deploy` followed by the seed script. The backend must be configured with `DATABASE_URL`, `JWT_SECRET`, `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `DEMO_EMAIL_RECIPIENT`, `DEFAULT_ADMIN_EMAIL`, `DEFAULT_ADMIN_PASSWORD`, `ORGANISER_SIGNUP_CODE`, and `CORS_ORIGIN`. The frontend must be configured with `VITE_API_URL` pointing to the deployed Render backend.

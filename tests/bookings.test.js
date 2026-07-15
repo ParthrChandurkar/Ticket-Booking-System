@@ -200,6 +200,7 @@ describe("bookings", () => {
 
     expect(mockSend).toHaveBeenCalledTimes(1);
     const emailPayload = mockSend.mock.calls[0][0];
+    expect(emailPayload.to).toEqual(["parthrchn27@gmail.com"]);
     expect(emailPayload.html).toContain(response.body.booking.bookingReference);
     expect(emailPayload.html).toContain("₹25.00");
     expect(emailPayload.html).toContain('src="cid:booking-qr-code"');

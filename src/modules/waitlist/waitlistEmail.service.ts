@@ -1,6 +1,11 @@
 import { Resend } from "resend";
 import { prisma } from "../../config/prisma";
-import { getEnv } from "../../config/env";
+import { getEnv, loadEnv } from "../../config/env";
+
+const getDemoEmailRecipient = () => {
+  loadEnv();
+  return process.env.DEMO_EMAIL_RECIPIENT ?? "parthrchn27@gmail.com";
+};
 
 const escapeHtml = (value: string) =>
   value
@@ -48,7 +53,7 @@ export const sendWaitlistOfferEmail = async (waitlistId: string) => {
   try {
     const response = await resend.emails.send({
       from: getEnv("RESEND_FROM_EMAIL"),
-      to: [customer.email],
+      to: [getDemoEmailRecipient()],
       subject: `Seat offer: ${event.title}`,
       html
     });
