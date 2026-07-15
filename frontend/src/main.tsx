@@ -135,9 +135,9 @@ const api = async <T,>(path: string, options: RequestInit = {}) => {
 };
 
 const useHashRoute = () => {
-  const [route, setRoute] = React.useState(location.hash.slice(1) || "/events");
+  const [route, setRoute] = React.useState(location.hash.slice(1) || "/");
   React.useEffect(() => {
-    const onHash = () => setRoute(location.hash.slice(1) || "/events");
+    const onHash = () => setRoute(location.hash.slice(1) || "/");
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);
   }, []);
@@ -210,6 +210,98 @@ const passwordStrength = (password: string) => {
   if (score === 2) return "medium";
   return "strong";
 };
+
+function LandingPage() {
+  const user = useAuth((state) => state.user);
+  const featured = useQuery({
+    queryKey: ["landing-events"],
+    queryFn: () => api<{ events: EventItem[] }>("/events/public")
+  });
+  const firstEvents = featured.data?.events.slice(0, 3) ?? [];
+  return (
+    <main className="landing-page">
+      <header className="landing-nav">
+        <LogoMark />
+        <nav>
+          <button onClick={() => go("/events")}>Browse events</button>
+          <button onClick={() => go(user ? "/bookings" : "/auth")}>{user ? "My bookings" : "Sign in"}</button>
+        </nav>
+      </header>
+
+      <section className="landing-hero">
+        <div className="landing-copy">
+          <p className="eyebrow">Movie and concert ticketing</p>
+          <h1>Book the right seat before someone else does.</h1>
+          <p>
+            SeatFlow brings event discovery, real-time seat holds, waitlists, QR tickets,
+            and role-based dashboards into one clean booking experience.
+          </p>
+          <div className="landing-actions">
+            <button className="primary-button compact" onClick={() => go("/events")}>Explore events</button>
+            <button className="outline-button" onClick={() => go("/auth")}>Create account</button>
+          </div>
+          <div className="landing-metrics">
+            <span><strong>10 min</strong> protected holds</span>
+            <span><strong>30 min</strong> waitlist offers</span>
+            <span><strong>QR</strong> email tickets</span>
+          </div>
+        </div>
+
+        <div className="landing-visual" aria-label="SeatFlow booking preview">
+          <div className="preview-topbar">
+            <span>Skyline Dreams</span>
+            <strong>Live seat map</strong>
+          </div>
+          <div className="preview-stage">SCREEN / STAGE</div>
+          <div className="preview-seats">
+            {Array.from({ length: 48 }, (_, index) => {
+              const state = index === 4 ? "mine" : index === 10 || index === 31 ? "held" : index % 13 === 0 ? "booked" : "available";
+              return <span key={index} className={`preview-seat ${state}`} />;
+            })}
+          </div>
+          <div className="preview-summary">
+            <div>
+              <span>Held by you</span>
+              <strong>A5 - Premium</strong>
+            </div>
+            <em>09:42</em>
+          </div>
+        </div>
+      </section>
+
+      <section className="landing-features">
+        <article>
+          <strong>Atomic seat holds</strong>
+          <p>Conditional database updates keep two customers from holding the same seat.</p>
+        </article>
+        <article>
+          <strong>Waitlist recovery</strong>
+          <p>Cancelled seats are offered to the next customer in line with a time limit.</p>
+        </article>
+        <article>
+          <strong>Operational dashboards</strong>
+          <p>Admins manage venues while organisers create shows and track revenue.</p>
+        </article>
+      </section>
+
+      <section className="landing-events">
+        <div>
+          <p className="eyebrow">Now showing</p>
+          <h2>Featured demo events</h2>
+        </div>
+        <div className="landing-event-row">
+          {firstEvents.map((event) => (
+            <button key={event.id} onClick={() => go(`/events/${event.id}`)}>
+              <span>{event.venue?.name ?? "Venue announced soon"}</span>
+              <strong>{event.title}</strong>
+              <em>{event.shows.length} show{event.shows.length === 1 ? "" : "s"}</em>
+            </button>
+          ))}
+        </div>
+      </section>
+    </main>
+  );
+}
 
 function AuthPage() {
   const [mode, setMode] = React.useState<"login" | "register">("login");
@@ -865,9 +957,10 @@ function AdminPage() {
 function App() {
   const route = useHashRoute();
   const user = useAuth((state) => state.user);
+  if (route === "/") return <LandingPage />;
   if (route === "/auth") return <AuthPage />;
   if (!user && !route.startsWith("/events")) return <AuthPage />;
-  if (route === "/events" || route === "/") return <EventsPage />;
+  if (route === "/events") return <EventsPage />;
   if (route.startsWith("/events/")) return <EventDetailPage id={route.split("/")[2]} />;
   if (route.startsWith("/shows/")) return <SeatMapPage showId={route.split("/")[2]} />;
   if (route === "/checkout") return <CheckoutPage />;
