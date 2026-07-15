@@ -531,6 +531,20 @@ textarea:focus {
   cursor: not-allowed;
 }
 
+.danger-button {
+  min-height: 40px;
+  border: 1px solid #f1b7b7;
+  border-radius: 8px;
+  background: #fff5f5;
+  color: var(--booked);
+  font-weight: 800;
+  padding: 0 14px;
+}
+
+.danger-button:hover {
+  background: #ffe8e8;
+}
+
 .link-button {
   margin-top: 18px;
   padding: 0;
@@ -605,6 +619,35 @@ textarea:focus {
   gap: 18px;
 }
 
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 14px;
+  margin-bottom: 22px;
+}
+
+.stat-card {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  padding: 18px;
+  box-shadow: 0 10px 30px rgba(16, 24, 40, .05);
+  display: grid;
+  gap: 8px;
+}
+
+.stat-card span,
+.helper-text,
+.section-heading span,
+.control-row span,
+.control-row p {
+  color: var(--muted);
+}
+
+.stat-card strong {
+  font-size: 30px;
+}
+
 .event-card,
 .panel,
 .table-card {
@@ -659,6 +702,87 @@ textarea:focus {
   padding: 22px;
   display: grid;
   gap: 14px;
+}
+
+.helper-text {
+  margin: -2px 0 4px;
+  line-height: 1.5;
+}
+
+.action-link {
+  justify-self: start;
+  min-height: 36px;
+}
+
+.section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.section-heading h2 {
+  margin: 0;
+}
+
+.control-list {
+  display: grid;
+  gap: 12px;
+}
+
+.control-row {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfcff;
+  padding: 14px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 16px;
+  align-items: center;
+}
+
+.control-row > div:first-child {
+  display: grid;
+  gap: 5px;
+}
+
+.control-row p {
+  margin: 0;
+  line-height: 1.45;
+}
+
+.row-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.row-actions.stretch {
+  justify-content: flex-start;
+}
+
+.row-actions button,
+.ops-table-row button {
+  min-height: 40px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+  color: #172033;
+  font-weight: 800;
+  padding: 0 12px;
+}
+
+.row-actions button:hover,
+.ops-table-row button:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.row-actions .danger-button:hover {
+  border-color: #f1b7b7;
+  color: var(--booked);
 }
 
 .show-list {
@@ -868,6 +992,38 @@ textarea:focus {
   font-size: 28px;
 }
 
+.ops-table {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.ops-table-head,
+.ops-table-row {
+  display: grid;
+  grid-template-columns: minmax(180px, 1.4fr) repeat(5, minmax(76px, .6fr)) minmax(120px, .8fr);
+  gap: 10px;
+  align-items: center;
+  padding: 12px 14px;
+}
+
+.ops-table-head {
+  background: #f3f6fb;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.ops-table-row {
+  border-top: 1px solid var(--line);
+  background: #ffffff;
+}
+
+.ops-table-row strong {
+  font-size: 16px;
+}
+
 @media (max-width: 820px) {
   .auth-shell,
   .app-shell,
@@ -907,5 +1063,15 @@ textarea:focus {
   .page-header {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .control-row,
+  .ops-table-head,
+  .ops-table-row {
+    grid-template-columns: 1fr;
+  }
+
+  .row-actions {
+    justify-content: flex-start;
   }
 }

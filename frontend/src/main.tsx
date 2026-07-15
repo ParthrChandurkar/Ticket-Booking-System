@@ -27,6 +27,19 @@ type Show = {
   time: string;
   pricing: { category: string; price: number }[];
 };
+type VenueItem = {
+  id: string;
+  name: string;
+  address: string;
+  createdAt?: string;
+  seatLayouts?: { id: string; rowLabel: string; seatNumber: number; category: string }[];
+};
+type EventSummary = {
+  event: { id: string; title: string };
+  totalRevenue: number;
+  totalBookings: number;
+  shows: { showId: string; date: string; time: string; revenue: number; seatsSold: number; confirmedBookings: number }[];
+};
 type Seat = {
   id: string;
   showId: string;
@@ -798,26 +811,89 @@ const showFormSchema = z.object({
 function OrganiserPage() {
   const [eventForm, setEventForm] = React.useState({ venueId: "", title: "", description: "" });
   const [showForm, setShowForm] = React.useState({ eventId: "", date: "", time: "", categoryPrices: "STANDARD:350,PREMIUM:750" });
+  const [editingEvent, setEditingEvent] = React.useState<EventItem | null>(null);
   const [eventError, setEventError] = React.useState("");
   const [showError, setShowError] = React.useState("");
+  const [actionMessage, setActionMessage] = React.useState("");
   const { data: events, refetch } = useQuery({ queryKey: ["my-events"], queryFn: () => api<{ events: EventItem[] }>("/events") });
-  const { data: venues } = useQuery({ queryKey: ["organiser-venues"], queryFn: () => api<{ venues: { id: string; name: string }[] }>("/organiser/venues") });
+  const { data: publicEvents } = useQuery({ queryKey: ["organiser-public-events"], queryFn: () => api<{ events: EventItem[] }>("/events/public") });
+  const { data: venues } = useQuery({ queryKey: ["organiser-venues"], queryFn: () => api<{ venues: VenueItem[] }>("/organiser/venues") });
   const [summaryEventId, setSummaryEventId] = React.useState("");
   const { data: summary } = useQuery({
     queryKey: ["summary", summaryEventId],
-    queryFn: () => api<{ totalRevenue: number; totalBookings: number; shows: { showId: string; date: string; time: string; revenue: number; seatsSold: number }[] }>(`/organiser/events/${summaryEventId}/summary`),
+    queryFn: () => api<EventSummary>(`/organiser/events/${summaryEventId}/summary`),
     enabled: Boolean(summaryEventId)
   });
+  const { data: showInventory } = useQuery({
+    queryKey: ["organiser-seat-inventory", summaryEventId, summary?.shows.map((show) => show.showId).join(",")],
+    queryFn: async () => {
+      const inventories = await Promise.all(
+        (summary?.shows ?? []).map(async (show) => {
+          const response = await api<{ seats: Seat[] }>(`/shows/${show.showId}/seats`);
+          return {
+            showId: show.showId,
+            total: response.seats.length,
+            available: response.seats.filter((seat) => seat.status === "AVAILABLE").length,
+            held: response.seats.filter((seat) => seat.status === "HELD").length,
+            booked: response.seats.filter((seat) => seat.status === "BOOKED").length
+          };
+        })
+      );
+      return new Map(inventories.map((item) => [item.showId, item]));
+    },
+    enabled: Boolean(summary?.shows.length)
+  });
+  const ownedEvents = events?.events ?? [];
+  const publicEventById = new Map((publicEvents?.events ?? []).map((event) => [event.id, event]));
+  const selectedPublicEvent = summaryEventId ? publicEventById.get(summaryEventId) : undefined;
+  const totalShows = ownedEvents.reduce((sum, event) => sum + (publicEventById.get(event.id)?.shows.length ?? 0), 0);
   const createEvent = async () => {
     try {
       setEventError("");
       eventFormSchema.parse(eventForm);
       await api("/events", { method: "POST", body: JSON.stringify(eventForm) });
       setEventForm({ venueId: "", title: "", description: "" });
-      refetch();
+      setActionMessage("Event created. You can now add showtimes and pricing.");
+      await refetch();
+      queryClient.invalidateQueries({ queryKey: ["organiser-public-events"] });
     } catch (error) {
       setEventError(zodMessage(error));
     }
+  };
+  const updateEvent = async () => {
+    if (!editingEvent) return;
+    try {
+      setEventError("");
+      eventFormSchema.parse(eventForm);
+      await api(`/events/${editingEvent.id}`, { method: "PUT", body: JSON.stringify(eventForm) });
+      setEditingEvent(null);
+      setEventForm({ venueId: "", title: "", description: "" });
+      setActionMessage("Event updated.");
+      await refetch();
+      queryClient.invalidateQueries({ queryKey: ["organiser-public-events"] });
+    } catch (error) {
+      setEventError(zodMessage(error));
+    }
+  };
+  const deleteEvent = async (event: EventItem) => {
+    if (!window.confirm(`Delete event "${event.title}"? This should only be used before bookings exist.`)) return;
+    try {
+      await api(`/events/${event.id}`, { method: "DELETE" });
+      setActionMessage("Event deleted.");
+      await refetch();
+      queryClient.invalidateQueries({ queryKey: ["organiser-public-events"] });
+    } catch (error) {
+      setActionMessage(error instanceof Error ? error.message : "Could not delete event.");
+    }
+  };
+  const editEvent = (event: EventItem) => {
+    setEditingEvent(event);
+    setEventError("");
+    setEventForm({
+      venueId: event.venueId,
+      title: event.title,
+      description: event.description
+    });
   };
   const createShow = async () => {
     try {
@@ -834,46 +910,121 @@ function OrganiserPage() {
         method: "POST",
         body: JSON.stringify({ date: showForm.date, time: showForm.time, categoryPrices })
       });
-      refetch();
+      setActionMessage("Show created with generated seats.");
+      await refetch();
+      queryClient.invalidateQueries({ queryKey: ["organiser-public-events"] });
+      queryClient.invalidateQueries({ queryKey: ["summary", showForm.eventId] });
     } catch (error) {
       setShowError(zodMessage(error));
     }
   };
   return (
     <Shell>
-      <h1>Organiser dashboard</h1>
+      <header className="page-header">
+        <div>
+          <p className="eyebrow">Control centre</p>
+          <h1>Organiser dashboard</h1>
+        </div>
+      </header>
+      <section className="stat-grid">
+        <div className="stat-card"><span>Events managed</span><strong>{ownedEvents.length}</strong></div>
+        <div className="stat-card"><span>Shows scheduled</span><strong>{totalShows}</strong></div>
+        <div className="stat-card"><span>Selected revenue</span><strong>{formatCurrency(summary?.totalRevenue ?? 0)}</strong></div>
+        <div className="stat-card"><span>Confirmed bookings</span><strong>{summary?.totalBookings ?? 0}</strong></div>
+      </section>
+      {actionMessage && <p className={actionMessage.includes("Could not") ? "form-error" : "form-success"}>{actionMessage}</p>}
       <section className="dashboard-grid">
         <div className="panel">
-          <h2>Create event</h2>
+          <h2>{editingEvent ? "Edit event" : "Create event"}</h2>
+          <p className="helper-text">Choose the venue first, then add a public title and customer-facing description.</p>
           <select value={eventForm.venueId} onChange={(e) => setEventForm({ ...eventForm, venueId: e.target.value })}>
-            <option value="">Select venue</option>
+            <option value="">Select venue for this event</option>
             {venues?.venues.map((venue) => <option key={venue.id} value={venue.id}>{venue.name}</option>)}
           </select>
-          <input placeholder="Title" value={eventForm.title} onChange={(e) => setEventForm({ ...eventForm, title: e.target.value })} />
-          <textarea placeholder="Description" value={eventForm.description} onChange={(e) => setEventForm({ ...eventForm, description: e.target.value })} />
+          <input placeholder="Event title, e.g. Indie Night Live" value={eventForm.title} onChange={(e) => setEventForm({ ...eventForm, title: e.target.value })} />
+          <textarea placeholder="Short public description shown on listing and detail pages" value={eventForm.description} onChange={(e) => setEventForm({ ...eventForm, description: e.target.value })} />
           {eventError && <p className="form-error">{eventError}</p>}
-          <button className="primary-button" onClick={createEvent}>Create event</button>
+          <button className="primary-button" onClick={editingEvent ? updateEvent : createEvent}>{editingEvent ? "Save event changes" : "Create event"}</button>
+          {editingEvent && <button className="ghost-button action-link" onClick={() => { setEditingEvent(null); setEventForm({ venueId: "", title: "", description: "" }); }}>Cancel edit</button>}
         </div>
         <div className="panel">
           <h2>Create show</h2>
+          <p className="helper-text">Every show automatically receives seats from the selected event venue layout.</p>
           <select value={showForm.eventId} onChange={(e) => setShowForm({ ...showForm, eventId: e.target.value })}>
-            <option value="">Select event</option>
+            <option value="">Select event to schedule</option>
             {events?.events.map((event) => <option key={event.id} value={event.id}>{event.title}</option>)}
           </select>
           <input type="date" value={showForm.date} onChange={(e) => setShowForm({ ...showForm, date: e.target.value })} />
-          <input value={showForm.time} onChange={(e) => setShowForm({ ...showForm, time: e.target.value })} placeholder="19:30" />
-          <input value={showForm.categoryPrices} onChange={(e) => setShowForm({ ...showForm, categoryPrices: e.target.value })} />
+          <input value={showForm.time} onChange={(e) => setShowForm({ ...showForm, time: e.target.value })} placeholder="Show time in 24h format, e.g. 19:30" />
+          <input value={showForm.categoryPrices} onChange={(e) => setShowForm({ ...showForm, categoryPrices: e.target.value })} placeholder="Category prices, e.g. STANDARD:350,PREMIUM:750" />
           {showError && <p className="form-error">{showError}</p>}
           <button className="primary-button" onClick={createShow}>Create show</button>
         </div>
       </section>
       <section className="panel">
-        <h2>Revenue summary</h2>
+        <div className="section-heading">
+          <div>
+            <p className="eyebrow">Portfolio</p>
+            <h2>Event controls</h2>
+          </div>
+          <span>{ownedEvents.length} active records</span>
+        </div>
+        <div className="control-list">
+          {ownedEvents.length === 0 && <p className="empty-state">No organiser events yet.</p>}
+          {ownedEvents.map((event) => {
+            const publicEvent = publicEventById.get(event.id);
+            return (
+              <article className="control-row" key={event.id}>
+                <div>
+                  <strong>{event.title}</strong>
+                  <span>{publicEvent?.venue?.name ?? "Venue"} · {publicEvent?.shows.length ?? 0} shows</span>
+                  <p>{event.description}</p>
+                </div>
+                <div className="row-actions">
+                  <button onClick={() => { setSummaryEventId(event.id); }}>View sales</button>
+                  <button onClick={() => { setShowForm({ ...showForm, eventId: event.id }); }}>Add show</button>
+                  <button onClick={() => editEvent(event)}>Edit</button>
+                  <button className="danger-button" onClick={() => deleteEvent(event)}>Delete</button>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      </section>
+      <section className="panel">
+        <h2>Revenue and seat inventory</h2>
+        <p className="helper-text">Select an event to supervise bookings, booked seats, held seats, availability, and show-level revenue.</p>
         <select value={summaryEventId} onChange={(e) => setSummaryEventId(e.target.value)}>
-          <option value="">Select event</option>
+          <option value="">Select event to inspect</option>
           {events?.events.map((event) => <option key={event.id} value={event.id}>{event.title}</option>)}
         </select>
-        {summary && <div className="summary"><strong>{formatCurrency(summary.totalRevenue)}</strong><span>{summary.totalBookings} bookings</span></div>}
+        {summary && (
+          <>
+            <div className="summary">
+              <strong>{formatCurrency(summary.totalRevenue)}</strong>
+              <span>{summary.totalBookings} confirmed bookings · {selectedPublicEvent?.shows.length ?? summary.shows.length} shows</span>
+            </div>
+            <div className="ops-table">
+              <div className="ops-table-head">
+                <span>Show</span><span>Available</span><span>Held</span><span>Booked</span><span>Sold</span><span>Revenue</span><span>Action</span>
+              </div>
+              {summary.shows.map((show) => {
+                const inventory = showInventory?.get(show.showId);
+                return (
+                  <div className="ops-table-row" key={show.showId}>
+                    <span>{new Date(show.date).toLocaleDateString()} · {show.time}</span>
+                    <strong>{inventory?.available ?? "-"}</strong>
+                    <strong>{inventory?.held ?? "-"}</strong>
+                    <strong>{inventory?.booked ?? "-"}</strong>
+                    <strong>{show.seatsSold}</strong>
+                    <strong>{formatCurrency(show.revenue)}</strong>
+                    <button onClick={() => go(`/shows/${show.showId}/seats`)}>Open seat map</button>
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        )}
       </section>
     </Shell>
   );
@@ -882,9 +1033,26 @@ function OrganiserPage() {
 function AdminPage() {
   const [venue, setVenue] = React.useState({ name: "", address: "" });
   const [layout, setLayout] = React.useState({ venueId: "", rows: "A,B,C", seatsPerRow: 10, category: "STANDARD" });
+  const [selectedVenueId, setSelectedVenueId] = React.useState("");
+  const [editVenue, setEditVenue] = React.useState({ name: "", address: "" });
   const [venueError, setVenueError] = React.useState("");
   const [layoutError, setLayoutError] = React.useState("");
-  const { data, refetch } = useQuery({ queryKey: ["admin-venues"], queryFn: () => api<{ venues: { id: string; name: string }[] }>("/venues") });
+  const [adminMessage, setAdminMessage] = React.useState("");
+  const { data, refetch } = useQuery({ queryKey: ["admin-venues"], queryFn: () => api<{ venues: VenueItem[] }>("/venues") });
+  const { data: allEvents } = useQuery({ queryKey: ["admin-public-events"], queryFn: () => api<{ events: EventItem[] }>("/events/public") });
+  const { data: selectedVenue, refetch: refetchSelectedVenue } = useQuery({
+    queryKey: ["admin-venue-detail", selectedVenueId],
+    queryFn: () => api<{ venue: VenueItem }>(`/venues/${selectedVenueId}`),
+    enabled: Boolean(selectedVenueId)
+  });
+  React.useEffect(() => {
+    if (selectedVenue?.venue) {
+      setEditVenue({
+        name: selectedVenue.venue.name,
+        address: selectedVenue.venue.address
+      });
+    }
+  }, [selectedVenue?.venue?.id]);
   const venueFormSchema = z.object({
     name: requiredText("Venue name"),
     address: requiredText("Venue address")
@@ -899,11 +1067,39 @@ function AdminPage() {
     try {
       setVenueError("");
       venueFormSchema.parse(venue);
-      await api("/venues", { method: "POST", body: JSON.stringify(venue) });
+      const response = await api<{ venue: VenueItem }>("/venues", { method: "POST", body: JSON.stringify(venue) });
       setVenue({ name: "", address: "" });
-      refetch();
+      setSelectedVenueId(response.venue.id);
+      setAdminMessage("Venue created. Add seat layouts before organisers schedule shows.");
+      await refetch();
     } catch (error) {
       setVenueError(zodMessage(error));
+    }
+  };
+  const updateVenue = async () => {
+    if (!selectedVenueId) return;
+    try {
+      setVenueError("");
+      venueFormSchema.parse(editVenue);
+      await api(`/venues/${selectedVenueId}`, { method: "PUT", body: JSON.stringify(editVenue) });
+      setAdminMessage("Venue details updated.");
+      await refetch();
+      await refetchSelectedVenue();
+    } catch (error) {
+      setVenueError(zodMessage(error));
+    }
+  };
+  const deleteVenue = async () => {
+    if (!selectedVenueId || !selectedVenue?.venue) return;
+    if (!window.confirm(`Delete venue "${selectedVenue.venue.name}"? This is only safe before events are attached.`)) return;
+    try {
+      await api(`/venues/${selectedVenueId}`, { method: "DELETE" });
+      setSelectedVenueId("");
+      setEditVenue({ name: "", address: "" });
+      setAdminMessage("Venue deleted.");
+      await refetch();
+    } catch (error) {
+      setAdminMessage(error instanceof Error ? error.message : "Could not delete venue.");
     }
   };
   const createLayout = async () => {
@@ -922,32 +1118,94 @@ function AdminPage() {
         }))
       );
       await api(`/venues/${layout.venueId}/seat-layouts`, { method: "POST", body: JSON.stringify({ seats }) });
+      setSelectedVenueId(layout.venueId);
+      setAdminMessage(`${seats.length} seats generated for ${layout.category.trim().toUpperCase()}.`);
+      await refetchSelectedVenue();
     } catch (error) {
       setLayoutError(zodMessage(error));
     }
   };
+  const venues = data?.venues ?? [];
+  const venueSeatCount = selectedVenue?.venue.seatLayouts?.length ?? 0;
+  const venueCategories = Array.from(new Set((selectedVenue?.venue.seatLayouts ?? []).map((seat) => seat.category)));
+  const totalShows = (allEvents?.events ?? []).reduce((sum, event) => sum + event.shows.length, 0);
   return (
     <Shell>
-      <h1>Admin dashboard</h1>
+      <header className="page-header">
+        <div>
+          <p className="eyebrow">Platform supervision</p>
+          <h1>Admin dashboard</h1>
+        </div>
+      </header>
+      <section className="stat-grid">
+        <div className="stat-card"><span>Venues</span><strong>{venues.length}</strong></div>
+        <div className="stat-card"><span>Published events</span><strong>{allEvents?.events.length ?? 0}</strong></div>
+        <div className="stat-card"><span>Total shows</span><strong>{totalShows}</strong></div>
+        <div className="stat-card"><span>Selected venue seats</span><strong>{venueSeatCount}</strong></div>
+      </section>
+      {adminMessage && <p className={adminMessage.includes("Could not") ? "form-error" : "form-success"}>{adminMessage}</p>}
       <section className="dashboard-grid">
         <div className="panel">
           <h2>Create venue</h2>
-          <input placeholder="Venue name" value={venue.name} onChange={(e) => setVenue({ ...venue, name: e.target.value })} />
-          <input placeholder="Address" value={venue.address} onChange={(e) => setVenue({ ...venue, address: e.target.value })} />
+          <p className="helper-text">Add the venue shell first. Seat rows and categories are generated in the next panel.</p>
+          <input placeholder="Venue name, e.g. PVR Icon Phoenix Palladium, Mumbai" value={venue.name} onChange={(e) => setVenue({ ...venue, name: e.target.value })} />
+          <input placeholder="Full address, area, city" value={venue.address} onChange={(e) => setVenue({ ...venue, address: e.target.value })} />
           {venueError && <p className="form-error">{venueError}</p>}
           <button className="primary-button" onClick={createVenue}>Create venue</button>
         </div>
         <div className="panel">
           <h2>Create seat layout</h2>
           <select value={layout.venueId} onChange={(e) => setLayout({ ...layout, venueId: e.target.value })}>
-            <option value="">Select venue</option>
-            {data?.venues.map((venue) => <option key={venue.id} value={venue.id}>{venue.name}</option>)}
+            <option value="">Select venue to receive generated seats</option>
+            {venues.map((venue) => <option key={venue.id} value={venue.id}>{venue.name}</option>)}
           </select>
-          <input value={layout.rows} onChange={(e) => setLayout({ ...layout, rows: e.target.value })} />
-          <input type="number" value={layout.seatsPerRow} onChange={(e) => setLayout({ ...layout, seatsPerRow: Number(e.target.value) })} />
-          <input value={layout.category} onChange={(e) => setLayout({ ...layout, category: e.target.value })} />
+          <input placeholder="Rows as comma-separated labels, e.g. A,B,C,D" value={layout.rows} onChange={(e) => setLayout({ ...layout, rows: e.target.value })} />
+          <input type="number" placeholder="Seats per row, e.g. 10" value={layout.seatsPerRow} onChange={(e) => setLayout({ ...layout, seatsPerRow: Number(e.target.value) })} />
+          <input placeholder="Seat category, e.g. STANDARD or PREMIUM" value={layout.category} onChange={(e) => setLayout({ ...layout, category: e.target.value.toUpperCase() })} />
           {layoutError && <p className="form-error">{layoutError}</p>}
           <button className="primary-button" onClick={createLayout}>Generate seats</button>
+        </div>
+      </section>
+      <section className="dashboard-grid">
+        <div className="panel">
+          <div className="section-heading">
+            <div>
+              <p className="eyebrow">Directory</p>
+              <h2>Venue supervision</h2>
+            </div>
+            <span>{venues.length} venues</span>
+          </div>
+          <div className="control-list">
+            {venues.map((item) => (
+              <article className="control-row" key={item.id}>
+                <div>
+                  <strong>{item.name}</strong>
+                  <span>{item.address}</span>
+                </div>
+                <div className="row-actions">
+                  <button onClick={() => { setSelectedVenueId(item.id); setLayout({ ...layout, venueId: item.id }); }}>Inspect</button>
+                </div>
+              </article>
+            ))}
+          </div>
+        </div>
+        <div className="panel">
+          <h2>Selected venue controls</h2>
+          {!selectedVenue?.venue && <p className="empty-state">Select a venue to inspect seat categories, update details, or delete an unused venue.</p>}
+          {selectedVenue?.venue && (
+            <>
+              <input value={editVenue.name} onChange={(e) => setEditVenue({ ...editVenue, name: e.target.value })} placeholder="Venue display name" />
+              <input value={editVenue.address} onChange={(e) => setEditVenue({ ...editVenue, address: e.target.value })} placeholder="Venue address" />
+              <div className="summary">
+                <strong>{venueSeatCount} seats</strong>
+                <span>{venueCategories.length ? venueCategories.join(", ") : "No seat categories yet"}</span>
+              </div>
+              <div className="row-actions stretch">
+                <button className="primary-button compact" onClick={updateVenue}>Save venue</button>
+                <button className="danger-button" onClick={deleteVenue}>Delete venue</button>
+              </div>
+            </>
+          )}
         </div>
       </section>
     </Shell>
