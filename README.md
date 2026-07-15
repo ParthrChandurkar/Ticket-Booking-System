@@ -4,37 +4,59 @@
 - **GitHub repo:** [https://github.com/ParthrChandurkar/Ticket-Booking-System](https://github.com/ParthrChandurkar/Ticket-Booking-System)
 
 ![Node.js](https://img.shields.io/badge/Node.js-Express-339933?logo=node.js&logoColor=white)
-![TypeScript](https://img.shields.io/badge/TypeScript-Backend%20%2B%20Frontend-3178C6?logo=typescript&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-Full%20Stack-3178C6?logo=typescript&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Prisma-4169E1?logo=postgresql&logoColor=white)
 ![React](https://img.shields.io/badge/React-Vite-61DAFB?logo=react&logoColor=111)
 
 ## 🎟️ Overview
 
-SeatFlow is a full-stack ticket booking system for movies and concerts. Customers can browse events, choose a show, hold seats from a visual seat map, confirm bookings, receive QR-based email tickets, and join a waitlist when a category is sold out. The backend focuses on correctness around seat state transitions, especially preventing two customers from holding or booking the same seat.
+SeatFlow is a full-stack movie and concert ticket booking system with live seat maps, timed seat holds, waitlists, booking confirmation emails, and QR tickets. The core engineering focus is correctness: two customers must never be able to hold or book the same seat at the same time.
+
+The app includes customer booking flows, organiser controls for events and revenue, and admin supervision for venues and seat layouts.
+
+## 🔐 Demo Access
+
+Use these accounts on the live demo:
+
+| Role | Email | Password |
+| --- | --- | --- |
+| Admin | `admin@seatflow.dev` | `NOlIQAO17mYel1O4fviQMsuL` |
+| Organiser | `organiser@seatflow.dev` | `SeatFlowDemo123` |
+
+Organiser signup code for creating another organiser account:
+
+```txt
+Kzr6mwAcCtxFSfJcamdy5g
+```
+
+Customer accounts can be created from the public signup screen.
 
 ## 🏗️ Tech Stack
 
-- Frontend: React, Vite, TypeScript, React Query, Zustand, Zod
-- Backend: Node.js, Express, TypeScript
-- ORM and database: Prisma with PostgreSQL
-- Auth: JWT access/refresh tokens, bcrypt password hashing, role-based middleware
-- Email and QR: Resend, `qrcode`
-- Tests: Jest and Supertest
-- Deployment: Vercel frontend, Render backend, Neon PostgreSQL
+- **Frontend:** React, Vite, TypeScript, React Query, Zustand, Zod
+- **Backend:** Node.js, Express, TypeScript
+- **Database:** PostgreSQL on Neon
+- **ORM:** Prisma
+- **Auth:** JWT access/refresh tokens, bcrypt password hashing, role-based middleware
+- **Email and tickets:** Resend, `qrcode`
+- **Testing:** Jest, Supertest
+- **Deployment:** Vercel frontend, Render backend, Neon PostgreSQL
 
 ## ✨ Key Features
 
-- Public event browsing with event detail and show selection
-- Visual seat map with frontend polling every 4 seconds
+- Public landing page and event browsing
+- Event detail pages with show selection
+- Visual seat map with 4-second polling updates
 - Seat states: `AVAILABLE`, `HELD`, `BOOKED`
-- 10-minute seat hold TTL with cron-based auto-release
-- Concurrency-safe seat holds using atomic conditional SQL updates
-- Customer-only booking flow with total pricing from show/category pricing
-- Waitlist join, auto-assignment on cancellation, 30-minute offer expiry, and cascading offers
-- QR ticket generation and Resend confirmation email delivery
-- Role-based access for `ADMIN`, `ORGANISER`, and `CUSTOMER`
-- Admin venue and seat-layout management
-- Organiser event/show creation and revenue summary
+- 10-minute customer hold TTL with cron-based expiry
+- Atomic conditional SQL updates for concurrency-safe holds
+- Booking confirmation from held seats only
+- QR ticket generation and email delivery
+- Waitlist queue for sold-out categories
+- 30-minute waitlist offer window with cascading expiry
+- Customer booking history, resend confirmation, and cancellation
+- Admin venue creation, venue supervision, and seat-layout generation
+- Organiser event/show controls, revenue summary, and seat inventory overview
 
 ## 🚀 Getting Started
 
@@ -49,14 +71,14 @@ npm install
 cd ..
 ```
 
-Create environment files from the examples:
+Create environment files:
 
 ```bash
 copy .env.example .env
 copy frontend\.env.example frontend\.env
 ```
 
-Update `.env` with your PostgreSQL, JWT, Resend, admin seed, and organiser signup values. Then run migrations and seed demo data:
+Run migrations and seed demo data:
 
 ```bash
 npx prisma migrate dev
@@ -70,7 +92,7 @@ npm run build
 npm start
 ```
 
-In a second terminal, start the frontend:
+Start the frontend in another terminal:
 
 ```bash
 cd frontend
@@ -88,12 +110,12 @@ Defaults:
 | Method | Path | Auth | Description |
 | --- | --- | --- | --- |
 | `GET` | `/health` | Public | Health check |
-| `POST` | `/auth/register` | Public | Register a customer account |
-| `POST` | `/auth/register-organiser` | Shared organiser code | Register an organiser account |
+| `POST` | `/auth/register` | Public | Register customer account |
+| `POST` | `/auth/register-organiser` | Shared code | Register organiser account |
 | `POST` | `/auth/login` | Public | Login and receive access/refresh tokens |
 | `POST` | `/auth/refresh` | Public | Refresh access token |
-| `GET` | `/events/public` | Public | List public events, optional search |
-| `GET` | `/events/public/:id` | Public | Get public event detail with shows and pricing |
+| `GET` | `/events/public` | Public | List public events |
+| `GET` | `/events/public/:id` | Public | Get event detail with shows and pricing |
 | `POST` | `/events` | Organiser | Create event |
 | `GET` | `/events` | Organiser | List organiser events |
 | `GET` | `/events/:id` | Organiser | Get organiser-owned event |
@@ -104,11 +126,11 @@ Defaults:
 | `GET` | `/organiser/events/:id/summary` | Organiser | Revenue and seats-sold summary |
 | `POST` | `/venues` | Admin | Create venue |
 | `GET` | `/venues` | Admin | List venues |
-| `GET` | `/venues/:id` | Admin | Get venue detail |
+| `GET` | `/venues/:id` | Admin | Get venue detail with seat layouts |
 | `PUT` | `/venues/:id` | Admin | Update venue |
 | `DELETE` | `/venues/:id` | Admin | Delete venue |
-| `POST` | `/venues/:id/seat-layouts` | Admin | Create venue seat-layout rows |
-| `GET` | `/shows/:showId/seats` | Public, optional auth | Get seat map; authenticated customers receive `isHeldByMe` |
+| `POST` | `/venues/:id/seat-layouts` | Admin | Create seat-layout rows |
+| `GET` | `/shows/:showId/seats` | Public, optional auth | Get seat map; auth adds `isHeldByMe` |
 | `POST` | `/shows/:showId/seats/:seatId/hold` | Customer | Hold an available seat |
 | `DELETE` | `/shows/:showId/seats/:seatId/hold` | Customer | Release current customer's hold |
 | `POST` | `/bookings` | Customer | Confirm booking from held seats |
@@ -121,38 +143,55 @@ Defaults:
 
 ## 🗄️ Database Schema
 
-The Prisma schema is defined in [prisma/schema.prisma](prisma/schema.prisma). Major models include `User`, `Venue`, `SeatLayout`, `Event`, `Show`, `ShowSeat`, `ShowSeatPricing`, `Booking`, `BookingSeat`, and `Waitlist`.
+The Prisma schema is defined in [prisma/schema.prisma](prisma/schema.prisma). Major models include:
 
-Migrations live in [prisma/migrations](prisma/migrations), and demo seed data is in [prisma/seed.js](prisma/seed.js).
+- `User`
+- `Venue`
+- `SeatLayout`
+- `Event`
+- `Show`
+- `ShowSeat`
+- `ShowSeatPricing`
+- `Booking`
+- `BookingSeat`
+- `Waitlist`
+
+Migrations live in [prisma/migrations](prisma/migrations), and demo seed data lives in [prisma/seed.js](prisma/seed.js).
 
 ## ⏱️ Seat Holds and TTL
 
-Seat holding uses an atomic conditional database update: a seat can move from `AVAILABLE` to `HELD` only when the SQL `WHERE` condition still sees it as available. If 10 customers try to hold the same seat at once, only one update can affect the row; the rest receive a conflict response.
+Seat holding uses an atomic conditional SQL update. A seat can move from `AVAILABLE` to `HELD` only if the database row is still available at update time. This prevents the classic read-then-write race where two customers select the same seat together.
 
-Expired holds are handled by a single cron job that runs every 5 seconds. It releases regular expired customer holds and separately processes expired waitlist offers, keeping those two flows distinct so a waitlist-held seat is not accidentally treated like a normal customer hold.
+Expired holds are released by a `node-cron` job every 5 seconds. Regular customer hold expiry and waitlist offer expiry are handled as separate operations so waitlist-held seats are not accidentally clobbered by the normal hold cleanup.
 
 ## 🧾 Waitlist Logic
 
-Customers can join a waitlist only when a show/category has no available seats. On booking cancellation, the freed seat is offered to the lowest-position waiting customer, held for that customer for 30 minutes, and linked to the waitlist entry as `OFFERED`.
+Customers can join the waitlist only when a show/category has no available seats. When a booking is cancelled, the freed seat is offered to the lowest-position waiting customer and held for that customer for 30 minutes.
 
-If the offer expires, the cron job marks it `EXPIRED`, releases the seat, and cascades the offer to the next waiting customer. Additional design notes are in [docs/design.md](docs/design.md).
+If the offer expires, the cron job marks the waitlist row `EXPIRED`, releases the seat, and cascades the offer to the next waiting customer. Additional notes are in [docs/design.md](docs/design.md).
 
 ## 📩 Email + QR Verification
 
-Booking confirmation email delivery has been verified in Gmail using the Resend sandbox sender. A live demo booking for **Parallel Lines: Indie Night** was delivered to `parthrchn27@gmail.com` with the subject `Booking confirmed: Parallel Lines: Indie Night`.
+Booking confirmation email delivery has been verified in Gmail using Resend's sandbox sender. A live demo booking for **Parallel Lines: Indie Night** was delivered to `parthrchn27@gmail.com` with the subject `Booking confirmed: Parallel Lines: Indie Night`.
 
-The email rendered the booking details, show time, total amount, selected seat, booking reference, and an inline QR ticket successfully. The verified sample used booking reference `c075587a-396b-4ff8-a59b-38fa5c2c9b97` for **Row A, Seat 1 (PREMIUM)** with total paid `₹900.00`.
+The email rendered the booking details, show time, total amount, selected seat, booking reference, and inline QR ticket successfully. Verified sample:
 
-## ⚠️ Known Limitations
-
-- Email is sent through Resend's sandbox sender, `onboarding@resend.dev`. For the assignment demo, all booking and waitlist emails are routed to `DEMO_EMAIL_RECIPIENT` (`parthrchn27@gmail.com`) because Resend sandbox delivery only works for the verified account email. Production use would require verifying a custom sending domain with Resend and sending to each customer email.
-- There is no real payment gateway integration. Checkout confirms seats already held by the customer and creates a booking record.
-- Render free-tier services may cold start after inactivity, so the first backend request can be slower.
-- The app uses polling for seat-map updates, as required, rather than WebSockets or SSE.
+- Booking reference: `c075587a-396b-4ff8-a59b-38fa5c2c9b97`
+- Seat: `Row A, Seat 1 (PREMIUM)`
+- Total paid: `₹900.00`
 
 ## ✅ Testing
 
-The backend test suite currently contains **22 Jest/Supertest tests across 5 suites**. Coverage includes auth, validation failures, role restrictions, concurrency-safe seat holding, booking confirmation/cancellation, email failure retry behavior, and waitlist expiry/cascade behavior.
+The backend test suite currently contains **22 Jest/Supertest tests across 5 suites**.
+
+Coverage includes:
+
+- Auth and role restrictions
+- Input validation failures
+- Concurrency-safe seat holding
+- Booking confirmation and cancellation
+- Email failure retry behavior
+- Waitlist offer expiry and cascade behavior
 
 Run tests from the repository root:
 
@@ -160,12 +199,37 @@ Run tests from the repository root:
 npm test
 ```
 
-Tests require `TEST_DATABASE_URL` and refuse to run when `TEST_DATABASE_URL` matches `DATABASE_URL`, protecting the real database from cleanup during test runs.
+Tests require `TEST_DATABASE_URL` and refuse to run when `TEST_DATABASE_URL` matches `DATABASE_URL`, protecting the real/demo database from automated cleanup.
 
 ## 🌐 Deployment
 
-- Frontend: Vercel
-- Backend: Render
-- Database: Neon PostgreSQL
+- **Frontend:** Vercel
+- **Backend:** Render
+- **Database:** Neon PostgreSQL
 
-Production deployment uses `prisma migrate deploy` followed by the seed script. The backend must be configured with `DATABASE_URL`, `JWT_SECRET`, `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `DEMO_EMAIL_RECIPIENT`, `DEFAULT_ADMIN_EMAIL`, `DEFAULT_ADMIN_PASSWORD`, `ORGANISER_SIGNUP_CODE`, and `CORS_ORIGIN`. The frontend must be configured with `VITE_API_URL` pointing to the deployed Render backend.
+Production deployment uses `prisma migrate deploy` followed by the seed script. The backend requires:
+
+```txt
+DATABASE_URL
+JWT_SECRET
+RESEND_API_KEY
+RESEND_FROM_EMAIL
+DEMO_EMAIL_RECIPIENT
+DEFAULT_ADMIN_EMAIL
+DEFAULT_ADMIN_PASSWORD
+ORGANISER_SIGNUP_CODE
+CORS_ORIGIN
+```
+
+The frontend requires:
+
+```txt
+VITE_API_URL
+```
+
+## ⚠️ Known Limitations
+
+- Resend is running with the sandbox sender `onboarding@resend.dev`. For the assignment demo, booking and waitlist emails are intentionally routed to `DEMO_EMAIL_RECIPIENT` (`parthrchn27@gmail.com`). Production use would require a verified Resend sending domain and delivery to each customer's real email.
+- There is no real payment gateway integration. Checkout confirms already-held seats and creates a booking record.
+- Render free-tier services can cold start after inactivity, so the first backend request may be slower.
+- Seat-map updates use polling by design, not WebSockets or SSE.
