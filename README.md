@@ -22,6 +22,7 @@ Use these accounts on the live demo:
 | --- | --- | --- |
 | Admin | `admin@seatflow.dev` | `NOlIQAO17mYel1O4fviQMsuL` |
 | Organiser | `organiser@seatflow.dev` | `SeatFlowDemo123` |
+| User | `Create User` | `Assign Your Own Password` |
 
 Organiser signup code for creating another organiser account:
 
